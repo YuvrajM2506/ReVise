@@ -3,6 +3,8 @@
 ## 1. Prerequisites
 - **Node.js**: v18.17.0+ or v20+
 - **npm**: v9+ or v10+
+- **Python**: 3.11+ (for Aider backend service)
+- **Git**: Installed and available in PATH
 
 ---
 
@@ -26,26 +28,42 @@ HINDSIGHT_API_KEY=hsk_your_hindsight_api_key
 # Hindsight Memory Bank ID
 HINDSIGHT_BANK_ID=acme-platform
 HINDSIGHT_BASE_URL=https://api.hindsight.vectorize.io
+
+# Aider Backend Service Configuration
+AIDER_SERVICE_URL=http://localhost:8001
+
+# Optional LLM Key for Aider Agent (OpenAI, Groq, Anthropic, or Gemini)
+OPENAI_API_KEY=sk-...
 ```
 
 > **Note on Offline / Simulator Mode**: ReVise is built to be resilient. If `HINDSIGHT_API_KEY` or `GROQ_API_KEY` are not set, ReVise automatically uses its high-fidelity local memory bank and deterministic simulation engine. You can run the full demo immediately out of the box.
 
 ---
 
-## 3. Populate Seed Data
+## 3. Install Dependencies & Start Services
 
-Run the idempotent seed script to load Acme Platform's 15 historical incident memories, post-mortems, and baseline runs:
+### Step A: Install Node dependencies
+```bash
+npm install
+```
 
+### Step B: Install Python dependencies for Aider Service
+```bash
+pip install -r aider-service/requirements.txt
+```
+
+### Step C: Start Aider Backend Service (Port 8001)
+```bash
+cd aider-service
+uvicorn main:app --port 8001 --reload
+```
+
+### Step D: Populate Seed Data
 ```bash
 npm run seed
 ```
 
-Alternatively, you can click the **"Seed Demo Memories"** button on the **Settings** page in the web app.
-
----
-
-## 4. Run the Web Application
-
+### Step E: Start Next.js Development Server (Port 3000)
 ```bash
 npm run dev
 ```
@@ -54,7 +72,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 5. Walkthrough for the 90-Second Demo
+## 4. Walkthrough for the Full Demo
 
 1. **Dashboard Overview (`/`)**:
    - Notice the persistent `Hindsight Memory Active •` badge with real connection status.
@@ -71,9 +89,17 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
    - Inspect the causal graph connecting the initial warning on Aug 10 to the staging rollback (RUN-889), the SEV-2 checkout outage (INC-024), the validated post-mortem (PM-024), and today's prevented risk (PR #167).
    - Click **"View prevention policy"** to inspect the compiled zero-downtime rules.
 
-4. **Teach ReVise Write-Back (`/teach`)**:
+4. **AI Pair Programmer (`/pair-programmer`)**:
+   - Click **"Pair Programmer"** in the sidebar or click **"Fix with Aider"** on any risk report.
+   - Select the preset **"PostgreSQL Migration Fix"** with **Hindsight Memory ON**.
+   - Click **"Run Aider Pair Session"**.
+   - Observe: Aider is supplied with the exact organizational memories from Hindsight (e.g. avoiding exclusive table locks, using `CREATE INDEX CONCURRENTLY`).
+   - Inspect the generated unified git diff and collapsible execution log.
+   - Click **"Re-analyze this diff"** to immediately verify in ReVise that the risk score drops to Safe/Resolved.
+
+5. **Teach ReVise Write-Back (`/teach`)**:
    - Select PR #167, choose outcome **"Failed in staging"**, and click **"Save outcome to Hindsight"**.
    - See the live success banner: *"Outcome added to organizational memory (Reinforced existing pattern)"*.
 
-5. **Team Standards (`/standards`)**:
+6. **Team Standards (`/standards`)**:
    - Review living standards inferred directly from incident memories (e.g., PostgreSQL Concurrent Index standard sourced from `PM-024`).

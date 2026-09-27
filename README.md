@@ -82,19 +82,44 @@
 4. **`src/app/api/teach/route.ts`**:
    - Writes outcome feedback into Hindsight, attaches causal links, appends new timeline nodes, and adjusts future retrieval weighting.
 
-5. **`src/lib/storage.ts`**:
+5. **`src/app/api/aider/run/route.ts` & `aider-service/`**:
+   - Grounded Pair Programming pipeline: Recalls organizational memories from Hindsight ➔ Injects historical post-mortems into Aider's context ➔ Clones repo in isolated sandbox ➔ Non-interactively generates git diff with Aider ➔ Surfaces syntax-highlighted unified diff for 1-click re-analysis in ReVise.
+
+6. **`src/lib/storage.ts`**:
    - Thread-safe local cache and persistent state store for Acme Platform demo runs, active guardrails, and living team standards.
+
+---
+
+## 🤖 AI Pair Programmer (Aider + Hindsight)
+
+ReVise features an interactive **AI Pair Programmer** (`/pair-programmer`) that pairs with [Aider](https://aider.chat) to fix high-risk code changes automatically while adhering to historical team standards.
+
+### Prerequisites:
+- **Python 3.11+**
+- Dependencies: `pip install -r aider-service/requirements.txt` (and `pip install -r aider-source/requirements.txt` for full agent capabilities)
+- Valid LLM API Key in `.env.local` (e.g., `OPENAI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`)
+
+### Starting the Aider Service:
+```bash
+cd aider-service
+uvicorn main:app --port 8001 --reload
+```
+
+The service exposes:
+- `POST /health`: Actively verifies configured LLM credentials against upstream APIs (no canned responses).
+- `POST /run`: Clones the repository into an isolated sandbox, formats the prompt with Hindsight memory context, executes Aider non-interactively, and returns the real unified git diff.
 
 ---
 
 ## 🛠️ Tech Stack
 
 - **Framework**: Next.js 14+ (App Router) + React 18 + TypeScript
+- **Backend Agent Service**: FastAPI + Uvicorn + Python 3.11+ (Aider agent engine)
 - **Styling**: Tailwind CSS (Dark Navy `#080911`, Indigo `#6C5CE7`, glowing badges)
-- **LLM Provider**: Groq Cloud LPU API (`openai/gpt-oss-120b`, `qwen-2.5-32b`, `llama-3.3-70b-versatile`)
+- **LLM Provider**: Groq Cloud LPU API (`openai/gpt-oss-120b`, `qwen-2.5-32b`, `llama-3.3-70b-versatile`), OpenAI, Anthropic, Gemini
 - **Memory Engine**: Hindsight Cloud REST API / SDK (`https://api.hindsight.vectorize.io`)
 - **Icons**: Lucide React
-- **Syntax**: Monospaced code viewer with custom themes & line numbers
+- **Syntax**: Monospaced code viewer & Prism unified diff highlighter
 
 ---
 
@@ -103,6 +128,7 @@
 ### 1. Install Dependencies
 ```bash
 npm install
+pip install -r aider-service/requirements.txt
 ```
 
 ### 2. Configure Environment Variables
@@ -110,19 +136,25 @@ Copy `.env.example` to `.env.local`:
 ```bash
 cp .env.example .env.local
 ```
-Add your Groq and Hindsight API keys (or run immediately in high-fidelity offline mode):
+Add your Groq, Hindsight, or OpenAI API keys:
 ```env
 GROQ_API_KEY=gsk_your_groq_key
 HINDSIGHT_API_KEY=hsk_your_hindsight_key
 HINDSIGHT_BANK_ID=acme-platform
+AIDER_SERVICE_URL=http://localhost:8001
 ```
 
-### 3. Seed Demo Memories
+### 3. Start Aider Backend Service (Port 8001)
+```bash
+cd aider-service && uvicorn main:app --port 8001 --reload
+```
+
+### 4. Seed Demo Memories
 ```bash
 npm run seed
 ```
 
-### 4. Start Development Server
+### 5. Start Development Server (Port 3000)
 ```bash
 npm run dev
 ```
