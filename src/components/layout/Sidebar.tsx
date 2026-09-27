@@ -12,11 +12,12 @@ import {
   Settings,
   ChevronDown,
   Layers,
+  Bot,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/analyze', label: 'Analyze Change', icon: GitPullRequest },
+  { href: '/pair-programmer', label: 'Pair Programmer', icon: Bot },
   { href: '/timeline', label: 'Memory Timeline', icon: GitBranch },
   { href: '/teach', label: 'Teach ReVise', icon: Sparkles },
   { href: '/standards', label: 'Team Standards', icon: ShieldCheck },
@@ -41,24 +42,26 @@ export default function Sidebar() {
     <aside className="w-64 bg-[#090a16] border-r border-white/10 flex flex-col justify-between shrink-0 h-screen sticky top-0 select-none z-30">
       {/* Brand Header */}
       <div>
-        <div className="p-5 flex items-center gap-3 border-b border-white/5">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-glow-sm shadow-indigo-500/30">
-            <Layers className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-white text-base tracking-tight">ReVise</span>
-              <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">AI</span>
+        <Link href="/" className="p-5 flex items-center gap-3 border-b border-white/5 hover:bg-white/[0.02] transition block">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-glow-sm shadow-indigo-500/30 shrink-0">
+              <Layers className="w-5 h-5 text-white" />
             </div>
-            <p className="text-[10px] font-mono tracking-wider text-slate-400 uppercase">ENGINEERING MEMORY</p>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-white text-base tracking-tight">ReVise</span>
+                <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">AI</span>
+              </div>
+              <p className="text-[10px] font-mono tracking-wider text-slate-400 uppercase">ENGINEERING MEMORY</p>
+            </div>
           </div>
-        </div>
+        </Link>
 
         {/* Navigation Items */}
         <nav className="p-3 space-y-1">
           {NAV_ITEMS.map(item => {
             const Icon = item.icon;
-            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+            const isActive = pathname.startsWith(item.href);
 
             return (
               <Link

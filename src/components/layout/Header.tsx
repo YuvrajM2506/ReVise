@@ -15,6 +15,7 @@ export default function Header({ customTitle }: HeaderProps) {
     if (customTitle) return customTitle;
     if (pathname === '/') return 'Overview';
     if (pathname.startsWith('/analyze')) return 'Analyze Change';
+    if (pathname.startsWith('/pair-programmer')) return 'AI Pair Programmer';
     if (pathname.startsWith('/report')) return 'Risk Report';
     if (pathname.startsWith('/timeline')) return 'Memory Timeline';
     if (pathname.startsWith('/teach')) return 'Teach ReVise';
