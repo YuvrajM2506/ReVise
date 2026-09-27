@@ -11,7 +11,7 @@ interface AppStore {
   standards: TeamStandard[];
   diagnostics: Array<{
     timestamp: string;
-    action: 'RECALL' | 'RETAIN' | 'GROQ_EVAL' | 'HEALTH_PING';
+    action: 'RECALL' | 'RETAIN' | 'GROQ_EVAL' | 'HEALTH_PING' | 'AIDER_RUN';
     service: string;
     details: string;
     latency_ms: number;
@@ -107,7 +107,7 @@ export function resetToSeedData() {
   return freshStore;
 }
 
-export function addDiagnosticLog(action: 'RECALL' | 'RETAIN' | 'GROQ_EVAL' | 'HEALTH_PING', service: string, details: string, latency_ms: number, success: boolean) {
+export function addDiagnosticLog(action: 'RECALL' | 'RETAIN' | 'GROQ_EVAL' | 'HEALTH_PING' | 'AIDER_RUN', service: string, details: string, latency_ms: number, success: boolean) {
   const store = getStore();
   store.diagnostics.unshift({
     timestamp: new Date().toISOString(),
