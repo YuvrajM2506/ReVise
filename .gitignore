@@ -41,11 +41,13 @@ next-env.d.ts
 .aider-venv/
 .aider*
 
-# Aider generated files
+# Python cache
+__pycache__/
+*.pyc
 aider-source/.aider.tags.cache.v4/
 aider-source/.aider.chat.history.md
 aider-source/.aider.input.history
 aider-source/__pycache__/
 aider-source/**/__pycache__/
 aider-source/*.egg-info/
-aider-source/**/__pycache__/
+
