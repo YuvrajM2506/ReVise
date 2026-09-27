@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   FileCode,
   Info,
+  Bot,
 } from 'lucide-react';
 import { EvaluationRun, Finding, CICheckRecommendation } from '@/lib/types';
 
@@ -332,6 +333,14 @@ jobs:
                 </>
               )}
             </button>
+
+            <Link
+              href={`/pair-programmer?service=${encodeURIComponent(run.service)}&files=${encodeURIComponent(run.file_name)}&task=${encodeURIComponent(`Refactor ${run.file_name} in ${run.service} to address ${output.findings[0]?.title || 'deployment risk'} following recommended safer rollout: ${output.safer_rollout.join(', ')}`)}`}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#14162e] hover:bg-[#1a1d3d] border border-indigo-500/30 text-xs font-medium text-indigo-300 transition"
+            >
+              <Bot className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Fix with Aider</span>
+            </Link>
 
             <Link
               href={`/teach?run_id=${run.id}&service=${encodeURIComponent(run.service)}&title=${encodeURIComponent(run.title)}`}
