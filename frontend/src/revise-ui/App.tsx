@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Shell from "./components/Shell";
+import LandingPage from "./pages/LandingPage";
 import { EmptyState } from "./components/ui";
 import { HomePage, ReviewPage, TeachPage } from "./pages/core";
 import { MemoryPage, TimelinePage } from "./pages/memory";
@@ -10,11 +11,13 @@ export default function App() {
   const [path, setPath] = useState("/");
   useEffect(() => {
     const sync = () => setPath(window.location.pathname);
+    sync();
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
+  if (path === "/") return <LandingPage/>;
   let page = <EmptyState title="Page not found" detail="This ReVise workspace route does not exist."/>;
-  if (path === "/") page = <HomePage/>;
+  if (path === "/dashboard") page = <HomePage/>;
   if (path === "/github-review") page = <ReviewPage mode="github"/>;
   if (path === "/analyze") page = <ReviewPage mode="code"/>;
   if (path === "/teach") page = <TeachPage/>;
