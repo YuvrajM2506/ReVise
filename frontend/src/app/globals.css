@@ -1,0 +1,168 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #071317;
+  --foreground: #f2f5f4;
+  --muted: #8ca0a8;
+  --border: rgba(2, 160, 160, 0.12);
+  --primary: #02a0a0;
+  --secondary: #ffbd65;
+}
+
+html {
+  background: #071317;
+}
+
+body {
+  margin: 0;
+  background: #071317;
+  color: #f2f5f4;
+  font-family: var(--font-inter), Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-mont), Arial, sans-serif;
+}
+
+code,
+pre {
+  font-family: var(--font-jetbrains), Consolas, monospace;
+}
+
+::selection {
+  background: rgba(2, 160, 160, 0.25);
+  color: #f2f5f4;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #071317;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #163842;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #02a0a0;
+}
+
+.glow-card {
+  border: 1px solid rgba(2, 160, 160, 0.12);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glow-card:hover {
+  border-color: rgba(2, 160, 160, 0.28);
+  box-shadow: 0 0 16px rgba(2, 160, 160, 0.06);
+}
+
+.glow-card-active {
+  background: #0e2229;
+  border-color: rgba(2, 160, 160, 0.45);
+  box-shadow: 0 0 20px rgba(2, 160, 160, 0.1);
+}
+
+.revise-display {
+  font-family: var(--font-mont), Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.revise-display-strong {
+  font-family: var(--font-mont), Arial, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 0.98;
+}
+
+.revise-body {
+  font-family: var(--font-inter), Arial, sans-serif;
+}
+
+.revise-code {
+  font-family: var(--font-jetbrains), Consolas, monospace;
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #5a7178;
+  font-style: italic;
+}
+
+.token.punctuation {
+  color: #8ca0a8;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol {
+  color: #ffbd65;
+}
+
+.token.deleted {
+  color: #e55353;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin {
+  color: #ffca85;
+}
+
+.token.inserted {
+  color: #02a0a0;
+}
+
+.token.operator,
+.token.entity,
+.token.url {
+  color: #8ca0a8;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #02a0a0;
+  font-weight: 600;
+}
+
+.token.function,
+.token.class-name {
+  color: #2dd4bf;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #ffbd65;
+}
+
+@media (max-width: 768px) {
+  .revise-display,
+  .revise-display-strong {
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+}

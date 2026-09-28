@@ -47,8 +47,8 @@ export default function RiskReportPage() {
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-8 py-20 text-center">
-        <div className="inline-block animate-spin w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full mb-4"></div>
-        <p className="text-sm text-slate-400">Loading risk report...</p>
+        <div className="inline-block animate-spin w-8 h-8 border-2 border-[#02A0A0] border-t-transparent rounded-full mb-4"></div>
+        <p className="text-xs font-mono text-[#8CA0A8]">Loading risk report provenance & evidence...</p>
       </div>
     );
   }
@@ -56,12 +56,12 @@ export default function RiskReportPage() {
   if (!run) {
     return (
       <div className="max-w-6xl mx-auto px-8 py-20 text-center space-y-4">
-        <AlertTriangle className="w-10 h-10 text-pink-500 mx-auto" />
-        <h3 className="text-xl font-bold text-white">Evaluation run not found</h3>
-        <p className="text-xs text-slate-400">The requested risk analysis does not exist.</p>
+        <AlertTriangle className="w-10 h-10 text-[#E55353] mx-auto" />
+        <h3 className="text-xl font-bold text-[#F0F6F6]">Evaluation run not found</h3>
+        <p className="text-xs text-[#8CA0A8]">The requested risk analysis record does not exist or has expired.</p>
         <Link
           href="/analyze"
-          className="inline-block px-4 py-2 bg-indigo-600 rounded-lg text-xs font-semibold text-white"
+          className="inline-block px-4 py-2 bg-[#02A0A0] hover:bg-[#028F8F] rounded-lg text-xs font-semibold text-[#071317] transition"
         >
           Run New Analysis
         </Link>
@@ -109,45 +109,58 @@ jobs:
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-8 py-8 space-y-6">
+    <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
       {/* Zero Memory Notice Banner if memory was toggled OFF */}
       {!run.memory_enabled && (
-        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+        <div className="p-4 rounded-xl bg-[#1A150D] border border-[#FFBD65]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+            <AlertTriangle className="w-5 h-5 text-[#FFBD65] shrink-0" />
             <div>
-              <p className="text-xs font-semibold text-amber-300">
-                This analysis used no historical memory
+              <p className="text-xs font-semibold text-[#FFBD65]">
+                This analysis ran with Hindsight Memory OFF
               </p>
-              <p className="text-[11px] text-amber-400/80">
-                Results were evaluated strictly on generic static syntax rules. Contrast this with the memory-grounded evaluation.
+              <p className="text-[11px] text-[#FFBD65]/80">
+                Results were evaluated strictly on generic static syntax rules without historical postmortem context.
               </p>
             </div>
           </div>
           <Link
             href={`/analyze?scenario=scenario-unsafe-db`}
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition"
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#FFBD65]/15 text-[#FFBD65] border border-[#FFBD65]/30 hover:bg-[#FFBD65]/25 transition self-start sm:self-auto"
           >
             Re-run with Memory ON →
           </Link>
         </div>
       )}
 
-      {/* Main Top Banner matching Screenshot 3 */}
-      <div className="glow-card rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
+      {/* Main Top Banner */}
+      <div className={`p-6 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden ${
+        isHighRisk 
+          ? 'bg-[#140D10] border-[#E55353]/30' 
+          : isMedRisk 
+          ? 'bg-[#17130B] border-[#FFBD65]/30' 
+          : 'bg-[#0B1B20] border-[#02A0A0]/30'
+      }`}>
         <div className="space-y-2">
-          <span className="text-[11px] font-mono tracking-widest uppercase font-semibold text-slate-400">
-            DEPLOYMENT RISK
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono tracking-widest uppercase font-semibold text-[#8CA0A8]">
+              DEPLOYMENT RISK REPORT
+            </span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#071317] border border-[#163842] text-[#8CA0A8]">
+              {run.service} • {run.file_name}
+            </span>
+          </div>
           <h2
             className={`text-3xl font-extrabold tracking-tight ${
-              isHighRisk ? 'text-pink-500' : isMedRisk ? 'text-amber-400' : 'text-emerald-400'
+              isHighRisk ? 'text-[#E55353]' : isMedRisk ? 'text-[#FFBD65]' : 'text-[#02A0A0]'
             }`}
           >
             {output.risk_level} risk
           </h2>
-          <div className="flex items-center gap-2 text-xs text-slate-300 pt-1">
-            <span className="w-2 h-2 rounded-full bg-pink-500"></span>
+          <div className="flex items-center gap-2 text-xs text-[#8CA0A8] pt-1">
+            <span className={`w-2 h-2 rounded-full ${
+              isHighRisk ? 'bg-[#E55353]' : isMedRisk ? 'bg-[#FFBD65]' : 'bg-[#02A0A0]'
+            }`}></span>
             <span>{output.provenance_note}</span>
           </div>
         </div>
@@ -156,12 +169,12 @@ jobs:
         <div className="flex items-baseline gap-1 md:text-right">
           <span
             className={`text-5xl md:text-6xl font-black font-mono tracking-tight ${
-              isHighRisk ? 'text-pink-500' : isMedRisk ? 'text-amber-400' : 'text-emerald-400'
+              isHighRisk ? 'text-[#E55353]' : isMedRisk ? 'text-[#FFBD65]' : 'text-[#02A0A0]'
             }`}
           >
             {output.risk_score}
           </span>
-          <span className="text-lg font-mono font-medium text-slate-500">/ 100</span>
+          <span className="text-lg font-mono font-medium text-[#5A7178]">/ 100</span>
         </div>
       </div>
 
@@ -170,33 +183,33 @@ jobs:
         {/* Left Column (2 Cols): Tabs & Findings / Safer Path / Action Buttons */}
         <div className="lg:col-span-2 space-y-6">
           {/* Tabs Row */}
-          <div className="flex items-center gap-4 border-b border-white/10 pb-2 text-xs font-semibold">
+          <div className="flex items-center gap-4 border-b border-[#163842] pb-2 text-xs font-semibold">
             <button
               onClick={() => setActiveTab('findings')}
-              className={`pb-2 px-1 transition ${
+              className={`pb-2 px-1 transition relative ${
                 activeTab === 'findings'
-                  ? 'text-indigo-400 border-b-2 border-indigo-500'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'text-[#02A0A0] border-b-2 border-[#02A0A0]'
+                  : 'text-[#8CA0A8] hover:text-[#F0F6F6]'
               }`}
             >
               Findings ({output.findings.length})
             </button>
             <button
               onClick={() => setActiveTab('ci_checks')}
-              className={`pb-2 px-1 transition ${
+              className={`pb-2 px-1 transition relative ${
                 activeTab === 'ci_checks'
-                  ? 'text-indigo-400 border-b-2 border-indigo-500'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'text-[#02A0A0] border-b-2 border-[#02A0A0]'
+                  : 'text-[#8CA0A8] hover:text-[#F0F6F6]'
               }`}
             >
               CI Checks
             </button>
             <button
               onClick={() => setActiveTab('safer_rollout')}
-              className={`pb-2 px-1 transition ${
+              className={`pb-2 px-1 transition relative ${
                 activeTab === 'safer_rollout'
-                  ? 'text-indigo-400 border-b-2 border-indigo-500'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'text-[#02A0A0] border-b-2 border-[#02A0A0]'
+                  : 'text-[#8CA0A8] hover:text-[#F0F6F6]'
               }`}
             >
               Safer Rollout
@@ -213,23 +226,23 @@ jobs:
                 return (
                   <div
                     key={finding.id}
-                    className="p-4 rounded-xl bg-[#0c0d1b] border border-white/5 space-y-1.5"
+                    className="p-4 rounded-xl bg-[#0B1B20] border border-[#163842] space-y-2 hover:border-[#02A0A0]/30 transition"
                   >
                     <div className="flex items-center gap-2.5">
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                           isHigh
-                            ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
+                            ? 'bg-[#E55353]/15 text-[#E55353] border border-[#E55353]/30'
                             : isMed
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            ? 'bg-[#FFBD65]/15 text-[#FFBD65] border border-[#FFBD65]/30'
+                            : 'bg-[#02A0A0]/15 text-[#02A0A0] border border-[#02A0A0]/30'
                         }`}
                       >
                         {finding.severity}
                       </span>
-                      <h4 className="text-xs font-semibold text-white">{finding.title}</h4>
+                      <h4 className="text-xs font-semibold text-[#F0F6F6]">{finding.title}</h4>
                     </div>
-                    <p className="text-xs text-slate-400 leading-relaxed pl-1">
+                    <p className="text-xs text-[#8CA0A8] leading-relaxed pl-1">
                       {finding.description}
                     </p>
                   </div>
@@ -245,24 +258,24 @@ jobs:
                 output.ci_checks.map(ci => (
                   <div
                     key={ci.id}
-                    className="p-4 rounded-xl bg-[#0c0d1b] border border-white/5 space-y-2"
+                    className="p-4 rounded-xl bg-[#0B1B20] border border-[#163842] space-y-2.5"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-white">{ci.title}</span>
-                      <span className="text-[10px] font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">
+                      <span className="text-xs font-semibold text-[#F0F6F6]">{ci.title}</span>
+                      <span className="text-[10px] font-mono text-[#02A0A0] bg-[#02A0A0]/10 border border-[#02A0A0]/20 px-2 py-0.5 rounded">
                         {ci.type}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">{ci.description}</p>
+                    <p className="text-xs text-[#8CA0A8]">{ci.description}</p>
                     {ci.snippet && (
-                      <pre className="p-3 rounded-lg bg-[#070811] text-[11px] font-mono text-indigo-200 overflow-x-auto border border-white/5">
+                      <pre className="p-3 rounded-lg bg-[#050E11] text-[11px] font-mono text-[#9FD5D5] overflow-x-auto border border-[#163842]">
                         <code>{ci.snippet}</code>
                       </pre>
                     )}
                   </div>
                 ))
               ) : (
-                <div className="p-6 text-center text-xs text-slate-500">
+                <div className="p-6 text-center text-xs text-[#5A7178] bg-[#0B1B20] border border-[#163842] rounded-xl">
                   No specialized CI checks required for this baseline run.
                 </div>
               )}
@@ -271,28 +284,30 @@ jobs:
 
           {/* Tab 3: Safer Rollout */}
           {activeTab === 'safer_rollout' && (
-            <div className="p-4 rounded-xl bg-[#0c0d1b] border border-white/5 space-y-2">
-              <h4 className="text-xs font-semibold text-indigo-300">Ordered Execution Procedure:</h4>
-              <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
+            <div className="p-5 rounded-xl bg-[#0B1B20] border border-[#163842] space-y-3">
+              <h4 className="text-xs font-semibold text-[#02A0A0] font-mono uppercase tracking-wider">Ordered Execution Procedure:</h4>
+              <div className="space-y-2 text-xs text-[#8CA0A8] leading-relaxed">
                 {output.safer_rollout.map((step, idx) => (
-                  <div key={idx} className="p-2 rounded bg-white/5 font-mono text-xs">
-                    {step}
+                  <div key={idx} className="p-2.5 rounded bg-[#071317] border border-[#163842] font-mono text-xs text-[#F0F6F6] flex items-start gap-2.5">
+                    <span className="text-[#02A0A0] font-bold">{idx + 1}.</span>
+                    <span>{step}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Recommended Safer Path Card (Matching Screenshot 3) */}
-          <div className="p-4 rounded-xl bg-[#0c181f] border border-teal-500/30 space-y-2.5">
-            <h4 className="text-xs font-bold text-teal-400 tracking-wide uppercase">
+          {/* Recommended Safer Path Card */}
+          <div className="p-5 rounded-xl bg-[#0B1B20] border border-[#02A0A0]/35 space-y-3">
+            <h4 className="text-xs font-bold text-[#02A0A0] tracking-wide uppercase font-mono flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-[#02A0A0]" />
               Recommended Safer Path
             </h4>
-            <div className="space-y-1.5 text-xs text-slate-200">
+            <div className="space-y-2 text-xs text-[#F0F6F6]">
               {output.safer_rollout.map((step, idx) => (
-                <div key={idx} className="flex items-start gap-2">
-                  <span className="text-teal-400 font-semibold shrink-0">•</span>
-                  <span>{step}</span>
+                <div key={idx} className="flex items-start gap-2.5">
+                  <span className="text-[#02A0A0] font-semibold shrink-0">•</span>
+                  <span className="text-[#8CA0A8]"><strong className="text-[#F0F6F6]">{step.split(':')[0]}:</strong>{step.includes(':') ? step.substring(step.indexOf(':') + 1) : ''}</span>
                 </div>
               ))}
             </div>
@@ -302,16 +317,16 @@ jobs:
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               onClick={handleCopyComment}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#14162e] hover:bg-[#1a1d3d] border border-white/10 text-xs font-medium text-slate-200 transition"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#0B1B20] hover:bg-[#0E2229] border border-[#163842] text-xs font-medium text-[#F0F6F6] transition"
             >
               {copiedComment ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Copied!</span>
+                  <Check className="w-3.5 h-3.5 text-[#02A0A0]" />
+                  <span className="text-[#02A0A0]">Copied!</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-3.5 h-3.5 text-slate-400" />
+                  <Copy className="w-3.5 h-3.5 text-[#8CA0A8]" />
                   <span>Copy review comment</span>
                 </>
               )}
@@ -319,16 +334,16 @@ jobs:
 
             <button
               onClick={handleCopyCI}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#14162e] hover:bg-[#1a1d3d] border border-white/10 text-xs font-medium text-slate-200 transition"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#0B1B20] hover:bg-[#0E2229] border border-[#163842] text-xs font-medium text-[#F0F6F6] transition"
             >
               {copiedCI ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Added CI config!</span>
+                  <Check className="w-3.5 h-3.5 text-[#02A0A0]" />
+                  <span className="text-[#02A0A0]">Added CI config!</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#8CA0A8]" />
                   <span>Add CI checks</span>
                 </>
               )}
@@ -336,15 +351,15 @@ jobs:
 
             <Link
               href={`/pair-programmer?service=${encodeURIComponent(run.service)}&files=${encodeURIComponent(run.file_name)}&task=${encodeURIComponent(`Refactor ${run.file_name} in ${run.service} to address ${output.findings[0]?.title || 'deployment risk'} following recommended safer rollout: ${output.safer_rollout.join(', ')}`)}`}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#14162e] hover:bg-[#1a1d3d] border border-indigo-500/30 text-xs font-medium text-indigo-300 transition"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#0B1B20] hover:bg-[#0E2229] border border-[#02A0A0]/40 text-xs font-medium text-[#02A0A0] transition"
             >
-              <Bot className="w-3.5 h-3.5 text-indigo-400" />
+              <Bot className="w-3.5 h-3.5 text-[#02A0A0]" />
               <span>Fix with Aider</span>
             </Link>
 
             <Link
               href={`/teach?run_id=${run.id}&service=${encodeURIComponent(run.service)}&title=${encodeURIComponent(run.title)}`}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white shadow-glow-sm shadow-indigo-500/20 transition"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#02A0A0] hover:bg-[#028F8F] text-xs font-semibold text-[#071317] transition"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>Teach ReVise</span>
@@ -354,17 +369,17 @@ jobs:
 
         {/* Right Column (1 Col): Memory Evidence Panel */}
         <div className="space-y-4">
-          <div className="glow-card p-5 rounded-2xl border border-white/10 space-y-4">
+          <div className="p-5 rounded-xl bg-[#0B1B20] border border-[#163842] space-y-4">
             {/* Header with REAL count badge */}
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white tracking-tight">Memory Evidence</h3>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                {output.memory_citations.length} memories retrieved
+              <h3 className="text-sm font-bold text-[#F0F6F6] tracking-tight">Memory Evidence</h3>
+              <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-[#02A0A0]/15 text-[#02A0A0] border border-[#02A0A0]/30">
+                {output.memory_citations.length} retrieved
               </span>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Why ReVise made this recommendation:
+            <p className="text-xs text-[#8CA0A8]">
+              Ground truth cited from team incidents and postmortems:
             </p>
 
             {/* List of Retrieved Memories */}
@@ -378,55 +393,55 @@ jobs:
                   return (
                     <div
                       key={citation.memory_id}
-                      className="p-3 rounded-xl bg-[#090a16] border border-white/5 space-y-1 hover:border-white/15 transition"
+                      className="p-3.5 rounded-lg bg-[#071317] border border-[#163842] space-y-1.5 hover:border-[#02A0A0]/30 transition"
                     >
-                      <div className="flex items-center justify-between text-[10px] text-slate-400">
-                        <span className="flex items-center gap-1.5 font-semibold text-slate-300">
+                      <div className="flex items-center justify-between text-[10px] text-[#8CA0A8]">
+                        <span className="flex items-center gap-1.5 font-semibold font-mono text-[#F0F6F6]">
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
                               isIncident
-                                ? 'bg-pink-400'
+                                ? 'bg-[#E55353]'
                                 : isPostMortem
-                                ? 'bg-emerald-400'
+                                ? 'bg-[#02A0A0]'
                                 : isPipeline
-                                ? 'bg-amber-400'
-                                : 'bg-indigo-400'
+                                ? 'bg-[#FFBD65]'
+                                : 'bg-[#02A0A0]'
                             }`}
                           ></span>
                           {citation.type.toUpperCase().replace('_', ' ')}
                         </span>
-                        <span>{citation.date}</span>
+                        <span className="font-mono">{citation.date}</span>
                       </div>
 
-                      <h4 className="text-xs font-semibold text-white">{citation.title}</h4>
-                      <p className="text-[11px] text-slate-400">{citation.relevance_note}</p>
+                      <h4 className="text-xs font-semibold text-[#F0F6F6]">{citation.title}</h4>
+                      <p className="text-[11px] text-[#8CA0A8] leading-relaxed">{citation.relevance_note}</p>
                     </div>
                   );
                 })
               ) : (
-                <div className="p-4 text-center text-xs text-slate-500 border border-dashed border-white/10 rounded-xl">
+                <div className="p-4 text-center text-xs text-[#5A7178] border border-dashed border-[#163842] rounded-lg">
                   No memories retrieved for this memory-less run.
                 </div>
               )}
             </div>
 
             {/* Collapsible: Why this recommendation? */}
-            <div className="pt-2 border-t border-white/5">
+            <div className="pt-2 border-t border-[#163842]">
               <button
                 type="button"
                 onClick={() => setWhyExpanded(!whyExpanded)}
-                className="w-full flex items-center justify-between text-xs font-semibold text-slate-300 hover:text-white py-1 transition"
+                className="w-full flex items-center justify-between text-xs font-semibold text-[#8CA0A8] hover:text-[#F0F6F6] py-1 transition"
               >
                 <span>Why this recommendation?</span>
                 {whyExpanded ? (
-                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                  <ChevronUp className="w-4 h-4 text-[#8CA0A8]" />
                 ) : (
-                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                  <ChevronDown className="w-4 h-4 text-[#8CA0A8]" />
                 )}
               </button>
 
               {whyExpanded && (
-                <p className="mt-2 text-xs text-slate-400 leading-relaxed bg-[#070811] p-3 rounded-lg border border-white/5">
+                <p className="mt-2 text-xs text-[#8CA0A8] leading-relaxed bg-[#050E11] p-3 rounded-lg border border-[#163842] font-mono">
                   {output.why_recommendation}
                 </p>
               )}

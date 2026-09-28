@@ -51,3 +51,12 @@ aider-source/__pycache__/
 aider-source/**/__pycache__/
 aider-source/*.egg-info/
 
+
+# Frontend generated files
+/frontend/node_modules/
+/frontend/.next/
+/frontend/out/
+/frontend/build/
+
+# Frontend runtime data
+/frontend/data/

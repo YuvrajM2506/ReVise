@@ -153,61 +153,61 @@ function AnalyzeContent() {
       {/* Header with Title & Memory ON/OFF Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Analyze change</h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h2 className="text-2xl font-bold text-[#F0F6F6] tracking-tight">Analyze change</h2>
+          <p className="text-xs text-[#8CA0A8] mt-0.5">
             Evaluate deployment risk against persistent engineering history and standards.
           </p>
         </div>
 
         {/* The Hero ON/OFF Toggle */}
-        <div className="flex items-center gap-3 bg-[#0d0e21] border border-white/10 p-2 rounded-xl">
+        <div className="flex items-center gap-3 bg-[#0B1B20] border border-[#163842] p-2.5 rounded-xl">
           <div className="text-right">
-            <p className="text-xs font-semibold text-white">
+            <p className="text-xs font-semibold text-[#F0F6F6]">
               {memoryEnabled ? 'Hindsight Memory ON' : 'Hindsight Memory OFF'}
             </p>
-            <p className="text-[10px] text-slate-400">
-              {memoryEnabled ? 'Grounds analysis with 42+ memories' : 'Zero memory baseline'}
+            <p className="text-[10px] text-[#8CA0A8] font-mono">
+              {memoryEnabled ? 'Grounded with 42+ memories' : 'Zero memory baseline'}
             </p>
           </div>
           <button
             type="button"
             onClick={() => setMemoryEnabled(!memoryEnabled)}
-            className="focus:outline-none text-indigo-400 hover:text-indigo-300 transition"
+            className="focus:outline-none transition"
             title="Toggle Hindsight Memory ON/OFF to compare memory vs memory-less review"
           >
             {memoryEnabled ? (
-              <ToggleRight className="w-9 h-9 text-indigo-500 fill-indigo-500/20" />
+              <ToggleRight className="w-9 h-9 text-[#02A0A0] fill-[#02A0A0]/20" />
             ) : (
-              <ToggleLeft className="w-9 h-9 text-slate-500" />
+              <ToggleLeft className="w-9 h-9 text-[#5A7178]" />
             )}
           </button>
         </div>
       </div>
 
       {/* Main Form Fields Row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 glow-card p-4 rounded-xl border border-white/10">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 glow-card p-4 rounded-xl border border-[#163842] bg-[#0B1B20]">
         {/* PR Title */}
         <div className="md:col-span-1 space-y-1.5">
-          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-400">
+          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-[#8CA0A8]">
             PR TITLE
           </label>
           <input
             type="text"
             value={prTitle}
             onChange={e => setPrTitle(e.target.value)}
-            className="w-full px-3 py-2 bg-[#090a16] border border-white/10 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 bg-[#071317] border border-[#163842]/60 rounded-lg text-xs text-[#F0F6F6] placeholder-[#5A7178] focus:outline-none focus:border-[#02A0A0]"
           />
         </div>
 
         {/* Service */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-400">
+          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-[#8CA0A8]">
             SERVICE
           </label>
           <select
             value={service}
             onChange={e => setService(e.target.value)}
-            className="w-full px-3 py-2 bg-[#090a16] border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 bg-[#071317] border border-[#163842]/60 rounded-lg text-xs text-[#F0F6F6] focus:outline-none focus:border-[#02A0A0]"
           >
             {SERVICES.map(s => (
               <option key={s} value={s}>
@@ -219,13 +219,13 @@ function AnalyzeContent() {
 
         {/* Environment */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-400">
+          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-[#8CA0A8]">
             ENVIRONMENT
           </label>
           <select
             value={environment}
             onChange={e => setEnvironment(e.target.value as any)}
-            className="w-full px-3 py-2 bg-[#090a16] border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 bg-[#071317] border border-[#163842]/60 rounded-lg text-xs text-[#F0F6F6] focus:outline-none focus:border-[#02A0A0]"
           >
             {ENVIRONMENTS.map(env => (
               <option key={env} value={env}>
@@ -237,13 +237,13 @@ function AnalyzeContent() {
 
         {/* Policy */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-400">
+          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-[#8CA0A8]">
             POLICY
           </label>
           <select
             value={policy}
             onChange={e => setPolicy(e.target.value)}
-            className="w-full px-3 py-2 bg-[#090a16] border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 bg-[#071317] border border-[#163842]/60 rounded-lg text-xs text-[#F0F6F6] focus:outline-none focus:border-[#02A0A0]"
           >
             {POLICIES.map(p => (
               <option key={p} value={p}>
@@ -255,33 +255,33 @@ function AnalyzeContent() {
       </div>
 
       {/* Code / Changeset Editor Card */}
-      <div className="glow-card rounded-xl border border-white/10 overflow-hidden">
-        {/* Card Header matching Screenshot 2 */}
-        <div className="px-4 py-3 bg-[#0a0b17] border-b border-white/10 flex items-center justify-between">
+      <div className="glow-card rounded-xl border border-[#163842] bg-[#0B1B20] overflow-hidden">
+        {/* Technical Window Header */}
+        <div className="px-4 py-2.5 bg-[#071317] border-b border-[#163842]/50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* 3 Color Dots */}
+            {/* 3 Technical Status Dots */}
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></span>
-              <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]"></span>
-              <span className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#E55353]/80"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#FFBD65]/80"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#02A0A0]/80"></span>
             </div>
 
             {/* Tab */}
-            <div className="flex items-center gap-2 px-3 py-1 rounded bg-[#13152a] text-xs font-mono text-slate-200 border border-white/5">
-              <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+            <div className="flex items-center gap-2 px-3 py-1 rounded bg-[#0B1B20] text-xs font-mono text-[#F0F6F6] border border-[#163842]/40">
+              <FileCode className="w-3.5 h-3.5 text-[#02A0A0]" />
               <span>{fileName}</span>
             </div>
           </div>
 
-          <span className="text-[11px] font-mono text-slate-400 font-semibold px-2 py-0.5 rounded bg-white/5">
+          <span className="text-[11px] font-mono text-[#8CA0A8] font-semibold px-2 py-0.5 rounded bg-[#0B1B20] border border-[#163842]/40">
             {language}
           </span>
         </div>
 
         {/* Code Input with Line Numbers */}
-        <div className="bg-[#070811] p-4 flex gap-4 min-h-[160px] font-mono text-xs">
+        <div className="bg-[#050E11] p-4 flex gap-4 min-h-[160px] font-mono text-xs">
           {/* Line Numbers */}
-          <div className="text-slate-600 select-none text-right pr-2 border-r border-white/5 space-y-1">
+          <div className="text-[#5A7178] select-none text-right pr-2 border-r border-[#163842]/30 space-y-1">
             {codeSnippet.split('\n').map((_, idx) => (
               <div key={idx}>{idx + 1}</div>
             ))}
@@ -293,14 +293,14 @@ function AnalyzeContent() {
             onChange={e => setCodeSnippet(e.target.value)}
             rows={Math.max(5, codeSnippet.split('\n').length)}
             spellCheck={false}
-            className="flex-1 bg-transparent text-indigo-200 focus:outline-none resize-none leading-relaxed font-mono selection:bg-indigo-500/30"
+            className="flex-1 bg-transparent text-[#02A0A0] focus:outline-none resize-none leading-relaxed font-mono selection:bg-[#02A0A0]/25"
           />
         </div>
       </div>
 
       {/* Focus Areas Row */}
       <div className="space-y-2">
-        <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-400">
+        <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-[#8CA0A8]">
           FOCUS AREAS
         </label>
         <div className="flex flex-wrap gap-2">
@@ -311,10 +311,10 @@ function AnalyzeContent() {
                 key={area}
                 type="button"
                 onClick={() => toggleFocusArea(area)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition ${
                   isSelected
-                    ? 'bg-indigo-600 text-white border border-indigo-400/50 shadow-glow-sm shadow-indigo-500/30'
-                    : 'bg-[#0d0e21] text-slate-400 border border-white/10 hover:border-white/20 hover:text-slate-200'
+                    ? 'bg-[#02A0A0] text-[#071317] font-bold shadow-sm'
+                    : 'bg-[#0B1B20] text-[#8CA0A8] border border-[#163842]/60 hover:border-[#02A0A0]/40 hover:text-[#F0F6F6]'
                 }`}
               >
                 {area}
@@ -326,8 +326,8 @@ function AnalyzeContent() {
 
       {/* Bottom Row / CTA Footer */}
       <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="text-xs text-slate-500 flex items-center gap-2">
-          <kbd className="px-2 py-1 bg-white/5 border border-white/10 rounded font-mono text-[10px] text-slate-400">
+        <div className="text-xs text-[#5A7178] flex items-center gap-2">
+          <kbd className="px-2 py-1 bg-[#0B1B20] border border-[#163842]/50 rounded font-mono text-[10px] text-[#8CA0A8]">
             ⌘ + ↵
           </kbd>
           <span>to start evaluation</span>
@@ -337,20 +337,20 @@ function AnalyzeContent() {
           type="button"
           disabled={isSubmitting}
           onClick={handleAnalyze}
-          className={`flex items-center justify-center gap-2.5 px-6 py-3 rounded-lg font-semibold text-xs tracking-wide transition shadow-lg ${
+          className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold text-xs tracking-wide transition shadow-sm ${
             memoryEnabled
-              ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-glow-md shadow-indigo-500/30'
-              : 'bg-slate-700 hover:bg-slate-600 text-slate-200 shadow-slate-900'
+              ? 'bg-[#02A0A0] hover:bg-[#028787] text-[#071317]'
+              : 'bg-[#0B1B20] hover:bg-[#0E2229] border border-[#163842] text-[#8CA0A8] hover:text-[#F0F6F6]'
           }`}
         >
           {isSubmitting ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin text-white" />
+              <Loader2 className="w-4 h-4 animate-spin text-[#071317]" />
               <span>{submitStep || 'Evaluating with ReVise...'}</span>
             </>
           ) : (
             <>
-              <Sparkles className="w-4 h-4 text-indigo-300" />
+              <Sparkles className={`w-4 h-4 ${memoryEnabled ? 'text-[#071317]' : 'text-[#02A0A0]'}`} />
               <span>
                 {memoryEnabled
                   ? 'Analyze with Hindsight memory'
