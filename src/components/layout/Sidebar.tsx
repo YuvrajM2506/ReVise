@@ -39,20 +39,20 @@ export default function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-64 bg-[#090a16] border-r border-white/10 flex flex-col justify-between shrink-0 h-screen sticky top-0 select-none z-30">
+    <aside className="w-64 bg-[#0B1B20] border-r border-[#163842]/50 flex flex-col justify-between shrink-0 h-screen sticky top-0 select-none z-30">
       {/* Brand Header */}
       <div>
-        <Link href="/" className="p-5 flex items-center gap-3 border-b border-white/5 hover:bg-white/[0.02] transition block">
+        <Link href="/" className="p-5 flex items-center gap-3 border-b border-[#163842]/40 hover:bg-white/[0.02] transition block">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-glow-sm shadow-indigo-500/30 shrink-0">
-              <Layers className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 rounded-lg bg-[#02A0A0]/15 border border-[#02A0A0]/30 flex items-center justify-center shrink-0">
+              <Layers className="w-5 h-5 text-[#02A0A0]" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-white text-base tracking-tight">ReVise</span>
-                <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">AI</span>
+                <span className="font-bold text-[#F0F6F6] text-base tracking-tight">ReVise</span>
+                <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-[#02A0A0]/15 text-[#02A0A0] border border-[#02A0A0]/30 font-mono">AI</span>
               </div>
-              <p className="text-[10px] font-mono tracking-wider text-slate-400 uppercase">ENGINEERING MEMORY</p>
+              <p className="text-[10px] font-mono tracking-wider text-[#8CA0A8] uppercase">ENGINEERING MEMORY</p>
             </div>
           </div>
         </Link>
@@ -67,13 +67,13 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition-all ${
                   isActive
-                    ? 'bg-indigo-600/20 text-white border-l-2 border-indigo-500 shadow-sm shadow-indigo-500/10'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                    ? 'bg-[#02A0A0]/10 text-[#F0F6F6] border-l-2 border-[#02A0A0] font-semibold'
+                    : 'text-[#8CA0A8] hover:text-[#F0F6F6] hover:bg-white/[0.04]'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-[#02A0A0]' : 'text-[#8CA0A8]'}`} />
                 <span>{item.label}</span>
               </Link>
             );
@@ -82,29 +82,29 @@ export default function Sidebar() {
       </div>
 
       {/* Sidebar Bottom: Workspace & Connection Status */}
-      <div className="p-3 border-t border-white/5 space-y-2">
+      <div className="p-3 border-t border-[#163842]/40 space-y-2">
         {/* Workspace Switcher */}
-        <div className="p-2.5 rounded-lg bg-[#0d0e21] border border-white/5 flex items-center justify-between hover:border-white/10 transition cursor-pointer">
+        <div className="p-2.5 rounded-lg bg-[#071317] border border-[#163842]/50 flex items-center justify-between hover:border-[#02A0A0]/30 transition cursor-pointer">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-md bg-indigo-900/60 text-indigo-300 font-bold text-xs flex items-center justify-center shrink-0 border border-indigo-500/30">
+            <div className="w-7 h-7 rounded-md bg-[#02A0A0]/15 text-[#02A0A0] font-bold text-xs flex items-center justify-center shrink-0 border border-[#02A0A0]/30">
               AP
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-white truncate">Acme Platform</p>
-              <p className="text-[10px] text-slate-400 truncate">Engineering Workspace</p>
+              <p className="text-xs font-semibold text-[#F0F6F6] truncate">Acme Platform</p>
+              <p className="text-[10px] text-[#8CA0A8] truncate">Engineering Workspace</p>
             </div>
           </div>
-          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+          <ChevronDown className="w-4 h-4 text-[#8CA0A8] shrink-0" />
         </div>
 
         {/* Live Hindsight Connection Status */}
-        <div className="px-2 py-1.5 flex items-center gap-2 text-[11px] font-medium text-slate-400">
+        <div className="px-2 py-1.5 flex items-center gap-2 text-[11px] font-medium text-[#8CA0A8]">
           <span className="relative flex h-2 w-2">
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${hindsightConnected ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${hindsightConnected ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${hindsightConnected ? 'bg-[#02A0A0]' : 'bg-[#FFBD65]'}`}></span>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${hindsightConnected ? 'bg-[#02A0A0]' : 'bg-[#FFBD65]'}`}></span>
           </span>
-          <span className="text-slate-300">
-            {hindsightConnected ? 'Hindsight connected' : 'Connecting memory...'}
+          <span className="text-[#8CA0A8] font-mono text-[10px]">
+            {hindsightConnected ? 'Hindsight memory active' : 'Connecting memory...'}
           </span>
         </div>
       </div>

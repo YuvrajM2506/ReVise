@@ -71,14 +71,14 @@ export const REVISE_HYPERSPEED_PRESET: HyperspeedOptions = {
   carShiftX: [-0.8, 0.8],
   carFloorSeparation: [0, 5],
   colors: {
-    roadColor: 0x080911,
-    islandColor: 0x0c0e24,
-    background: 0x080911,
-    shoulderLines: 0x6c5ce7,
-    brokenLines: 0xa29bfe,
-    leftCars: [0xd856bf, 0x6c5ce7, 0x8b5cf6],
-    rightCars: [0x38bdf8, 0x6366f1, 0x818cf8],
-    sticks: 0x6c5ce7,
+    roadColor: 0x071317,
+    islandColor: 0x0b1b20,
+    background: 0x071317,
+    shoulderLines: 0x02a0a0,
+    brokenLines: 0x163842,
+    leftCars: [0x02a0a0, 0x22b8b8, 0x0d9488],
+    rightCars: [0xffbd65, 0xeaa852, 0xf59e0b],
+    sticks: 0x02a0a0,
   },
 };
 

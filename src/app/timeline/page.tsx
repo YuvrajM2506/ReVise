@@ -50,37 +50,37 @@ export default function TimelinePage() {
     switch (type) {
       case 'CODE REVIEW':
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-purple-500/20 text-purple-300 border border-purple-500/30">
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-[#02A0A0]/15 text-[#02A0A0] border border-[#02A0A0]/30">
             CODE REVIEW
           </span>
         );
       case 'PIPELINE FAILURE':
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-red-500/20 text-red-400 border border-red-500/30">
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-[#FFBD65]/15 text-[#FFBD65] border border-[#FFBD65]/30">
             PIPELINE FAILURE
           </span>
         );
       case 'SEV-2 INCIDENT':
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-pink-500/20 text-pink-400 border border-pink-500/30">
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-[#E55353]/15 text-[#E55353] border border-[#E55353]/30">
             SEV-2 INCIDENT
           </span>
         );
       case 'PROVEN RESOLUTION':
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-[#02A0A0]/15 text-[#02A0A0] border border-[#02A0A0]/30">
             PROVEN RESOLUTION
           </span>
         );
       case 'PREVENTED RISK':
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-[#02A0A0]/15 text-[#02A0A0] border border-[#02A0A0]/30">
             PREVENTED RISK
           </span>
         );
       default:
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-slate-500/20 text-slate-300">
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-[#163842] text-[#8CA0A8]">
             {type}
           </span>
         );
@@ -90,44 +90,44 @@ export default function TimelinePage() {
   const getNodeColor = (type: string) => {
     switch (type) {
       case 'CODE REVIEW':
-        return 'bg-purple-500 ring-purple-500/30';
+        return 'bg-[#02A0A0] ring-[#02A0A0]/20';
       case 'PIPELINE FAILURE':
-        return 'bg-red-500 ring-red-500/30';
+        return 'bg-[#FFBD65] ring-[#FFBD65]/20';
       case 'SEV-2 INCIDENT':
-        return 'bg-pink-500 ring-pink-500/30';
+        return 'bg-[#E55353] ring-[#E55353]/20';
       case 'PROVEN RESOLUTION':
-        return 'bg-emerald-500 ring-emerald-500/30';
+        return 'bg-[#02A0A0] ring-[#02A0A0]/20';
       case 'PREVENTED RISK':
-        return 'bg-cyan-400 ring-cyan-400/30';
+        return 'bg-[#02A0A0] ring-[#02A0A0]/20';
       default:
-        return 'bg-indigo-500 ring-indigo-500/30';
+        return 'bg-[#02A0A0] ring-[#02A0A0]/20';
     }
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-8 py-8 space-y-8">
+    <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
       {/* Header */}
       <div>
-        <span className="text-[11px] font-mono tracking-widest uppercase font-semibold text-indigo-400">
+        <span className="text-[10px] font-mono tracking-widest uppercase font-semibold text-[#02A0A0]">
           CAUSAL GRAPH
         </span>
-        <h2 className="text-3xl font-bold text-white tracking-tight mt-1">Memory timeline</h2>
-        <p className="text-sm text-slate-400 mt-1">
+        <h2 className="text-3xl font-bold text-[#F0F6F6] tracking-tight mt-1">Memory timeline</h2>
+        <p className="text-xs text-[#8CA0A8] mt-1">
           A causal record of how team decisions became production knowledge.
         </p>
       </div>
 
-      {/* Filters Row matching Screenshot 4 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 glow-card p-4 rounded-xl border border-white/10">
+      {/* Filters Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-[#0B1B20] border border-[#163842]">
         {/* Service */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-400">
+          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-[#8CA0A8]">
             SERVICE
           </label>
           <select
             value={selectedService}
             onChange={e => setSelectedService(e.target.value)}
-            className="w-full px-3 py-2 bg-[#090a16] border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 bg-[#071317] border border-[#163842] rounded-lg text-xs text-[#F0F6F6] focus:outline-none focus:border-[#02A0A0]"
           >
             <option value="orders-service">orders-service</option>
             <option value="checkout-api">checkout-api</option>
@@ -140,13 +140,13 @@ export default function TimelinePage() {
 
         {/* Event Type */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-400">
+          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-[#8CA0A8]">
             EVENT TYPE
           </label>
           <select
             value={selectedType}
             onChange={e => setSelectedType(e.target.value)}
-            className="w-full px-3 py-2 bg-[#090a16] border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 bg-[#071317] border border-[#163842] rounded-lg text-xs text-[#F0F6F6] focus:outline-none focus:border-[#02A0A0]"
           >
             <option value="all">All events</option>
             <option value="CODE REVIEW">Code Review</option>
@@ -159,13 +159,13 @@ export default function TimelinePage() {
 
         {/* Date Range */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-400">
+          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-[#8CA0A8]">
             DATE RANGE
           </label>
           <select
             value={selectedRange}
             onChange={e => setSelectedRange(e.target.value)}
-            className="w-full px-3 py-2 bg-[#090a16] border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 bg-[#071317] border border-[#163842] rounded-lg text-xs text-[#F0F6F6] focus:outline-none focus:border-[#02A0A0]"
           >
             <option value="Last 90 days">Last 90 days</option>
             <option value="Last 30 days">Last 30 days</option>
@@ -175,17 +175,17 @@ export default function TimelinePage() {
 
         {/* Search */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-400">
+          <label className="text-[10px] font-mono uppercase tracking-wider font-semibold text-[#8CA0A8]">
             SEARCH
           </label>
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-[#5A7178] absolute left-3 top-2.5" />
             <input
               type="text"
               placeholder="Search team memory..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 bg-[#090a16] border border-white/10 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full pl-8 pr-3 py-2 bg-[#071317] border border-[#163842] rounded-lg text-xs text-[#F0F6F6] placeholder-[#5A7178] focus:outline-none focus:border-[#02A0A0]"
             />
           </div>
         </div>
@@ -197,17 +197,17 @@ export default function TimelinePage() {
         <div className="lg:col-span-2 space-y-6">
           {/* Section Sub-header with Active Causal Pattern Badge */}
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-white capitalize">
+            <h3 className="text-base font-bold text-[#F0F6F6] capitalize">
               {selectedService}: migration risk pattern
             </h3>
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-mono font-semibold bg-[#02A0A0]/15 text-[#02A0A0] border border-[#02A0A0]/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#02A0A0] animate-pulse"></span>
               ACTIVE CAUSAL PATTERN
             </span>
           </div>
 
           {/* Timeline Nodes Chain */}
-          <div className="relative pl-6 space-y-8 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-gradient-to-b before:from-purple-500 before:via-pink-500 before:to-cyan-400">
+          <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-[1px] before:bg-gradient-to-b before:from-[#02A0A0] before:via-[#FFBD65] before:to-[#02A0A0]/30">
             {timeline.map(node => (
               <div key={node.id} className="relative group">
                 {/* Node Dot */}
@@ -218,38 +218,38 @@ export default function TimelinePage() {
                 ></div>
 
                 {/* Node Content Card */}
-                <div className="glow-card p-4 rounded-xl space-y-1.5 group-hover:border-white/20 transition">
+                <div className="p-4 rounded-xl bg-[#0B1B20] border border-[#163842] space-y-1.5 group-hover:border-[#02A0A0]/40 transition">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-mono text-slate-400 text-[11px]">{node.date}</span>
+                    <span className="font-mono text-[#8CA0A8] text-[11px]">{node.date}</span>
                     <div>{getTypeBadge(node.type)}</div>
                   </div>
 
-                  <h4 className="text-sm font-semibold text-white tracking-tight">{node.title}</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">{node.subtitle}</p>
+                  <h4 className="text-sm font-semibold text-[#F0F6F6] tracking-tight">{node.title}</h4>
+                  <p className="text-xs text-[#8CA0A8] leading-relaxed">{node.subtitle}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Right Column (1 Col): Active Guardrail Card matching Screenshot 4 */}
+        {/* Right Column (1 Col): Active Guardrail Card */}
         <div className="space-y-4">
-          <div className="glow-card p-6 rounded-2xl border border-white/10 space-y-5 sticky top-24">
+          <div className="p-6 rounded-xl bg-[#0B1B20] border border-[#163842] space-y-5 sticky top-24">
             <div>
-              <span className="text-[10px] font-mono tracking-widest uppercase font-semibold text-slate-400">
+              <span className="text-[10px] font-mono tracking-widest uppercase font-semibold text-[#8CA0A8]">
                 ACTIVE GUARDRAIL
               </span>
-              <h3 className="text-lg font-bold text-white tracking-tight mt-1">Pattern detected</h3>
+              <h3 className="text-lg font-bold text-[#F0F6F6] tracking-tight mt-1">Pattern detected</h3>
             </div>
 
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-extrabold text-indigo-400 font-mono">
+              <span className="text-4xl font-extrabold text-[#02A0A0] font-mono">
                 {activeGuardrail?.related_events_count || 3}
               </span>
-              <span className="text-xs text-slate-400">Related events detected</span>
+              <span className="text-xs text-[#8CA0A8]">Related events detected</span>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-[#8CA0A8] leading-relaxed">
               {activeGuardrail?.description ||
                 'Schema changes on high-traffic tables repeatedly caused lock-duration risk. Hindsight protects future deployments against this specific signature.'}
             </p>
@@ -257,7 +257,7 @@ export default function TimelinePage() {
             <button
               type="button"
               onClick={() => setActivePolicyModal(activeGuardrail)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-xs font-semibold text-indigo-200 transition shadow-glow-sm shadow-indigo-500/10"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#071317] hover:bg-[#0E2229] border border-[#02A0A0]/40 text-xs font-semibold text-[#02A0A0] transition"
             >
               <span>View prevention policy</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -268,29 +268,29 @@ export default function TimelinePage() {
 
       {/* Prevention Policy Modal */}
       {activePolicyModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="glow-card max-w-xl w-full p-6 rounded-2xl border border-white/20 space-y-5 relative">
+        <div className="fixed inset-0 bg-[#071317]/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="max-w-xl w-full p-6 rounded-xl bg-[#0B1B20] border border-[#163842] space-y-5 relative">
             <button
               onClick={() => setActivePolicyModal(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+              className="absolute top-4 right-4 text-[#8CA0A8] hover:text-[#F0F6F6]"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div>
-              <span className="text-[10px] font-mono tracking-widest uppercase font-semibold text-indigo-400">
+              <span className="text-[10px] font-mono tracking-widest uppercase font-semibold text-[#02A0A0]">
                 COMPILED REVISE POLICY
               </span>
-              <h3 className="text-lg font-bold text-white mt-1">
+              <h3 className="text-lg font-bold text-[#F0F6F6] mt-1">
                 {activePolicyModal.policy_title}
               </h3>
             </div>
 
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-slate-300">Mandatory Rules:</h4>
-              <ul className="space-y-1.5 text-xs text-slate-400">
+              <h4 className="text-xs font-semibold text-[#8CA0A8]">Mandatory Rules:</h4>
+              <ul className="space-y-1.5 text-xs text-[#8CA0A8]">
                 {activePolicyModal.policy_rules.map((rule, idx) => (
-                  <li key={idx} className="p-2 rounded bg-white/5 border border-white/5 font-mono">
+                  <li key={idx} className="p-2.5 rounded bg-[#071317] border border-[#163842] font-mono text-[#F0F6F6]">
                     {rule}
                   </li>
                 ))}
@@ -298,15 +298,15 @@ export default function TimelinePage() {
             </div>
 
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-slate-300">Recommended DDL Fix Snippet:</h4>
-              <pre className="p-3 rounded-lg bg-[#070811] text-[11px] font-mono text-indigo-200 overflow-x-auto border border-white/5">
+              <h4 className="text-xs font-semibold text-[#8CA0A8]">Recommended DDL Fix Snippet:</h4>
+              <pre className="p-3 rounded-lg bg-[#050E11] text-[11px] font-mono text-[#9FD5D5] overflow-x-auto border border-[#163842]">
                 <code>{activePolicyModal.example_fix_snippet}</code>
               </pre>
             </div>
 
             <button
               onClick={() => setActivePolicyModal(null)}
-              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg"
+              className="w-full py-2 bg-[#02A0A0] hover:bg-[#028F8F] text-[#071317] text-xs font-semibold rounded-lg transition"
             >
               Close Policy
             </button>

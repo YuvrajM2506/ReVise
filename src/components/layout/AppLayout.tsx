@@ -11,14 +11,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (isLandingPage) {
     return (
-      <div className="min-h-screen w-full bg-[#080911] text-slate-100 overflow-x-hidden">
+      <div className="min-h-screen w-full bg-[#071317] text-[#F0F6F6] overflow-x-hidden">
         {children}
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen w-full bg-[#080911] text-slate-100 overflow-hidden">
+    <div className="flex h-screen w-full bg-[#071317] text-[#F0F6F6] overflow-hidden">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
         <Header />
