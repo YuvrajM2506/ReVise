@@ -46,34 +46,51 @@ function NetworkCanvas() {
       vy: number;
       radius: number;
 
-      constructor() {
-        this.x = Math.random() * canvas.width;
-        this.y = Math.random() * canvas.height;
-        this.vx = (Math.random() - 0.5) * 0.5;
-        this.vy = (Math.random() - 0.5) * 0.5;
-        this.radius = Math.random() * 1.5 + 0.5;
-      }
+    constructor() {
+  if (!canvas) {
+    this.x = 0;
+    this.y = 0;
+    this.vx = 0;
+    this.vy = 0;
+    this.radius = 0;
+    return;
+  }
+
+  this.x = Math.random() * canvas.width;
+  this.y = Math.random() * canvas.height;
+  this.vx = (Math.random() - 0.5) * 0.5;
+  this.vy = (Math.random() - 0.5) * 0.5;
+  this.radius = Math.random() * 2 + 1;
+}
 
       update() {
-        this.x += this.vx;
-        this.y += this.vy;
+  if (!canvas) {
+    return;
+  }
 
-        if (this.x < 0 || this.x > canvas.width) {
-          this.vx *= -1;
-        }
+  this.x += this.vx;
+  this.y += this.vy;
 
-        if (this.y < 0 || this.y > canvas.height) {
-          this.vy *= -1;
-        }
-      }
+  if (this.x < 0 || this.x > canvas.width) {
+    this.vx *= -1;
+  }
 
-      draw() {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = COLORS.teal;
-        ctx.fill();
-      }
-    }
+  if (this.y < 0 || this.y > canvas.height) {
+    this.vy *= -1;
+  }
+}
+
+draw() {
+  if (!ctx) {
+    return;
+  }
+
+  ctx.beginPath();
+  ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+  ctx.fillStyle = COLORS.teal;
+  ctx.fill();
+  }
+    }  
 
     const resizeCanvas = () => {
       const parent = canvas.parentElement;
