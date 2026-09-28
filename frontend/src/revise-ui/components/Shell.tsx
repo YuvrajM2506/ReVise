@@ -3,7 +3,7 @@ import { Badge, Button, Heading, IconButton, StatusBadge, Text } from "./ui";
 import AmbientBackground from "./AmbientBackground";
 
 const nav = [
-  ["Home", "/"], ["Analyze", "/analyze"], ["Pull Request Review", "/github-review"],
+  ["Home", "/dashboard"], ["Analyze", "/analyze"], ["Pull Request Review", "/github-review"],
   ["Pair Programmer", "/pair-programmer"], ["Memory", "/memory"], ["Timeline", "/timeline"],
   ["Reports", "/report/42"], ["Standards", "/standards"], ["Teach ReVise", "/teach"], ["Settings", "/settings"],
 ];
@@ -22,7 +22,7 @@ export default function Shell({ path, children }: { path: string; children: Reac
     <AmbientBackground reduced={reducedBackground}/>
     {open && <div className="fixed inset-0 z-30 bg-canvas/80 lg:hidden" onClick={() => setOpen(false)}/>}
     <aside className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-surface-low transition-transform lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
-      <div className="flex h-16 items-center gap-3 border-b border-line px-4"><div className="brand-mark grid size-8 place-items-center rounded bg-brand font-display font-bold text-canvas">R</div><div><Heading level={1} className="text-base text-attention">ReVise</Heading><Text className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted">Engineering memory</Text></div></div>
+      <a className="flex h-16 items-center gap-3 border-b border-line px-4" href="/" aria-label="Return to ReVise landing page"><div className="brand-mark grid size-8 place-items-center rounded bg-brand font-display font-bold text-canvas">R</div><div><Heading level={1} className="text-base text-attention">ReVise</Heading><Text className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted">Engineering memory</Text></div></a>
       <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Primary">{nav.map(([label, href], i) => { const active = path === href || (href.startsWith("/report") && path.startsWith("/report")); return <Button key={href} variant="ghost" aria-current={active ? "page" : undefined} onClick={() => { navigate(href); setOpen(false); }} className={`nav-item w-full justify-start ${active ? "nav-active bg-brand-soft text-brand" : ""}`}><span className="inline-grid w-6 place-items-center font-mono text-[10px]">{marks[i]}</span>{label}</Button>; })}</nav>
       <div className="border-t border-line p-4"><div className="flex items-center justify-between"><Text className="text-xs text-muted">Memory status</Text><StatusBadge status="Connected"/></div><Text className="mt-3 font-mono text-[10px] text-muted">v2.4 · 847 memories</Text></div>
     </aside>

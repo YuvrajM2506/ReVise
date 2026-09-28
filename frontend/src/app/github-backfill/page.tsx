@@ -137,6 +137,7 @@ export default function GitHubBackfillPage() {
             </div>
           </div>
         </div>
+        <a href="/" className="text-sm text-indigo-300 transition-colors hover:text-white">Back to ReVise</a>
       </div>
 
       {/* 2. Configuration Form */}
