@@ -64,12 +64,18 @@ export interface ListPullsOptions {
 const GITHUB_API_BASE = 'https://api.github.com';
 const GITHUB_API_VERSION = '2022-11-28';
 
-function getGitHubToken(): string {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token || token.trim() === '') {
-    throw new Error('GITHUB_TOKEN is not configured in server environment variables.');
-  }
-  return token.trim();
+/**
+ * ReVise reads GitHub anonymously: no token is ever sent. Public repositories
+ * only, subject to GitHub's 60 requests/hour anonymous rate limit.
+ */
+function gitHubHeaders(accept: string, withJsonBody = false): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Accept': accept,
+    'X-GitHub-Api-Version': GITHUB_API_VERSION,
+    'User-Agent': 'ReVise-Code-Review-Agent',
+  };
+  if (withJsonBody) headers['Content-Type'] = 'application/json';
+  return headers;
 }
 
 function validateOwnerRepo(owner: string, repo: string): void {
@@ -104,18 +110,19 @@ async function handleGitHubError(response: Response, actionDescription: string):
   }
 
   if (response.status === 401) {
-    throw new Error(`GitHub API authentication failed while ${actionDescription}. Please verify GITHUB_TOKEN.`);
+    throw new Error(`GitHub rejected the credentials while ${actionDescription}. ReVise reads GitHub anonymously, so only public repositories are available.`);
   }
 
   if (response.status === 403 || response.status === 429) {
     if (rateLimitRemaining === '0') {
       const resetTime = rateLimitReset ? new Date(parseInt(rateLimitReset, 10) * 1000).toISOString() : 'unknown';
-      throw new Error(`GitHub API rate limit exceeded while ${actionDescription}. Limit resets at: ${resetTime}.`);
+      throw new Error(`GitHub's anonymous rate limit (60 requests/hour) was exceeded while ${actionDescription}. Limit resets at: ${resetTime}.`);
     }
+    throw new Error(`GitHub refused the request (${response.status}) while ${actionDescription}: ${errorMessage || 'access denied'}. ReVise reads GitHub anonymously, so private repositories are unavailable.`);
   }
 
   if (response.status === 404) {
-    throw new Error(`GitHub resource not found (404) while ${actionDescription}. Check owner/repo or pull number.`);
+    throw new Error(`GitHub resource not found (404) while ${actionDescription}. Check the owner, repository and pull request number, and note that ReVise reads public repositories anonymously.`);
   }
 
   throw new Error(`GitHub API error (${response.status}) while ${actionDescription}: ${errorMessage || response.statusText}`);
@@ -131,7 +138,6 @@ export async function listPulls(
   options: ListPullsOptions = {}
 ): Promise<GitHubPullRequest[]> {
   validateOwnerRepo(owner, repo);
-  const token = getGitHubToken();
 
   const queryParams = new URLSearchParams();
   if (options.state) queryParams.set('state', options.state);
@@ -145,12 +151,7 @@ export async function listPulls(
 
   const response = await fetch(url, {
     method: 'GET',
-    headers: {
-      'Accept': 'application/vnd.github+json',
-      'Authorization': `Bearer ${token}`,
-      'X-GitHub-Api-Version': GITHUB_API_VERSION,
-      'User-Agent': 'ReVise-Code-Review-Agent',
-    },
+    headers: gitHubHeaders('application/vnd.github+json'),
   });
 
   if (!response.ok) {
@@ -172,18 +173,12 @@ export async function getPullDiff(
 ): Promise<string> {
   validateOwnerRepo(owner, repo);
   validatePullNumber(pullNumber);
-  const token = getGitHubToken();
 
   const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner.trim())}/${encodeURIComponent(repo.trim())}/pulls/${pullNumber}`;
 
   const response = await fetch(url, {
     method: 'GET',
-    headers: {
-      'Accept': 'application/vnd.github.diff',
-      'Authorization': `Bearer ${token}`,
-      'X-GitHub-Api-Version': GITHUB_API_VERSION,
-      'User-Agent': 'ReVise-Code-Review-Agent',
-    },
+    headers: gitHubHeaders('application/vnd.github.diff'),
   });
 
   if (!response.ok) {
@@ -204,18 +199,12 @@ export async function getPullFiles(
 ): Promise<GitHubFile[]> {
   validateOwnerRepo(owner, repo);
   validatePullNumber(pullNumber);
-  const token = getGitHubToken();
 
   const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner.trim())}/${encodeURIComponent(repo.trim())}/pulls/${pullNumber}/files`;
 
   const response = await fetch(url, {
     method: 'GET',
-    headers: {
-      'Accept': 'application/vnd.github+json',
-      'Authorization': `Bearer ${token}`,
-      'X-GitHub-Api-Version': GITHUB_API_VERSION,
-      'User-Agent': 'ReVise-Code-Review-Agent',
-    },
+    headers: gitHubHeaders('application/vnd.github+json'),
   });
 
   if (!response.ok) {
@@ -243,28 +232,6 @@ export async function postPullReview(
     throw new Error('Review comment body cannot be empty.');
   }
 
-  const token = getGitHubToken();
-  const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner.trim())}/${encodeURIComponent(repo.trim())}/pulls/${pullNumber}/reviews`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/vnd.github+json',
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'X-GitHub-Api-Version': GITHUB_API_VERSION,
-      'User-Agent': 'ReVise-Code-Review-Agent',
-    },
-    body: JSON.stringify({
-      body: reviewBody,
-      event: 'COMMENT',
-    }),
-  });
-
-  if (!response.ok) {
-    await handleGitHubError(response, `posting review to PR #${pullNumber} in ${owner}/${repo}`);
-  }
-
-  const review: GitHubReview = await response.json();
-  return review;
+  // Anonymous access can read public repositories but cannot write to them.
+  throw new Error('Posting reviews back to GitHub requires authenticated access, which this build does not support. Share the ReVise report instead.');
 }
