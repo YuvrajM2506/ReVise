@@ -10,7 +10,9 @@ export type FocusArea =
   | 'Unsafe DB migration'
   | 'Missing secret'
   | 'Dependency upgrade'
-  | 'API contract change';
+  | 'API contract change'
+  | 'Configuration & Tooling'
+  | 'General Review';
 
 export interface MemoryMetadata {
   service: string;
@@ -60,6 +62,29 @@ export interface MemoryRecallResult {
     focus_area?: string;
     tags?: string[];
   };
+}
+
+export interface MemoryRelevanceContext {
+  service: string;
+  files: Array<{ filename: string }>;
+  diff_content: string;
+  focus_areas: FocusArea[];
+  language?: string;
+  pr_title?: string;
+}
+
+export interface ExcludedMemoryItem {
+  memory_id: string;
+  title: string;
+  reason: string;
+}
+
+export interface FilteredMemoriesResult {
+  relevant: MemoryItem[];
+  excluded: ExcludedMemoryItem[];
+  total_retrieved: number;
+  relevant_count: number;
+  excluded_count: number;
 }
 
 export interface Finding {
@@ -119,8 +144,13 @@ export interface EvaluationRun {
   memory_enabled: boolean;
   retrieved_memories_count: number;
   retrieved_memory_ids: string[];
+  relevant_memories_count?: number;
+  excluded_memories_count?: number;
   output: StructuredAnalysisOutput;
   execution_latency_ms: number;
+  files_changed?: number;
+  lines_changed?: number;
+  changed_files?: Array<{ filename: string; additions: number; deletions: number; status?: string }>;
 }
 
 export interface CausalTimelineNode {

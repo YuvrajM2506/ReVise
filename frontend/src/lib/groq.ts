@@ -4,11 +4,43 @@ import { addDiagnosticLog } from './storage';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GROQ_PRIMARY_MODEL = process.env.GROQ_PRIMARY_MODEL || 'openai/gpt-oss-120b';
 const GROQ_FALLBACK_MODELS = [
-  process.env.GROQ_FALLBACK_MODEL || 'qwen-2.5-32b',
-  'llama-3.3-70b-versatile',
-  'llama-3.1-70b-versatile',
-  'mixtral-8x7b-32768',
+  process.env.GROQ_FALLBACK_MODEL || 'openai/gpt-oss-20b',
+  'qwen/qwen3.8-27b',
 ];
+
+// Input size budgets to keep prompt safely below 8,000 TPM limit
+const MAX_CODE_SNIPPET_CHARS = 8000;
+const MAX_MEMORIES_COUNT = 4;
+const MAX_MEMORY_CONTENT_CHARS = 400;
+
+function budgetCodeSnippet(snippet: string, maxChars: number = MAX_CODE_SNIPPET_CHARS): string {
+  if (!snippet) return '';
+  if (snippet.length <= maxChars) return snippet;
+  const truncated = snippet.slice(0, maxChars);
+  const lastNewline = truncated.lastIndexOf('\n');
+  const cleanCut = lastNewline > maxChars * 0.7 ? truncated.slice(0, lastNewline) : truncated;
+  return `${cleanCut}\n\n... [Diff/Code truncated to fit model token budget] ...`;
+}
+
+function budgetMemories(memories: MemoryItem[], maxCount: number = MAX_MEMORIES_COUNT): string {
+  if (!memories || memories.length === 0) return '';
+  const selected = memories.slice(0, maxCount);
+  let evidenceText = `RETRIEVED HINDSIGHT EVIDENCE (${selected.length} historical memories from bank acme-platform):\n\n`;
+  selected.forEach((m, i) => {
+    const title = (m.title || '').trim();
+    let content = (m.content || '').trim();
+    if (content.length > MAX_MEMORY_CONTENT_CHARS) {
+      const lastSpace = content.slice(0, MAX_MEMORY_CONTENT_CHARS).lastIndexOf(' ');
+      content = (lastSpace > 200 ? content.slice(0, lastSpace) : content.slice(0, MAX_MEMORY_CONTENT_CHARS)) + '...';
+    }
+    const rel = (m.relevance_note || 'Historical evidence').trim();
+    evidenceText += `[MEMORY #${i + 1}] ID: ${m.id} | TYPE: ${(m.type || '').toUpperCase()} | SERVICE: ${m.service} | DATE: ${m.relative_time || m.timestamp}\n`;
+    evidenceText += `TITLE: ${title}\n`;
+    evidenceText += `CONTENT: ${content}\n`;
+    evidenceText += `RELEVANCE: ${rel}\n\n`;
+  });
+  return evidenceText;
+}
 
 interface EvaluateChangeParams {
   pr_title: string;
@@ -23,27 +55,29 @@ interface EvaluateChangeParams {
   memory_enabled: boolean;
 }
 
-const SYSTEM_PROMPT_WITH_MEMORY = `You are ReVise (MergeGuard), an elite AI Code Review Agent powered by continuous organizational memory from Hindsight.
-Your goal is to evaluate code changes, DDL migrations, and infrastructure configurations against production history, past incidents, pipeline failures, and validated post-mortems.
+const SYSTEM_PROMPT_WITH_MEMORY = `You are ReVise, an elite AI Code Review Agent powered by continuous organizational memory from Hindsight.
+Your goal is to evaluate code changes, configuration files, and pull requests objectively against technical best practices and relevant historical context.
 
 CORE PRINCIPLES:
-1. Every risk score MUST be traceable to named memory items retrieved from Hindsight.
-2. In the "memory_citations" array, ONLY cite memories explicitly provided in the retrieved evidence list below.
-3. In "why_recommendation", explicitly name which memory items (e.g., RUN-889, INC-024, PM-024) informed specific findings.
-4. If memories show a past outage or post-mortem matching this change, the risk_score MUST be HIGH (75-95) and the "safer_rollout" MUST provide the exact validated step-by-step remediation procedure.
+1. GROUNDED IN ACTUAL CHANGES: All findings, risks, and recommendations MUST be directly supported by the supplied PR diff and file patches. Do NOT invent code, APIs, migrations, secrets, outages, or runtime behavior that are not present in the supplied changes.
+2. CONTEXTUAL MEMORY USAGE: Retrieved Hindsight memories are contextual evidence only. A Hindsight memory must NOT create a finding unless the current PR contains a concrete, matching technical pattern. If a retrieved memory is not directly relevant to the current change, do NOT cite it as the basis for a finding.
+3. CONFIGURATION & TOOLING: If the change consists of configuration, linters, pre-commit, or repository files (e.g. .gitignore, .dockerignore, .flake8, yaml/toml/json), review only configuration-specific risks and best practices rather than inventing application-runtime or database issues.
+4. ACCURATE RISK SCORING: Risk score (0-100) must reflect the real risk of the actual diff first, calibrated by relevant historical precedent. Low-risk configuration or formatting changes without dangerous patterns should receive a Low risk score (e.g. 10-30).
+5. ACTIONABLE SAFER ROLLOUT: "safer_rollout" must give concrete, practical steps relevant to the actual files changed in this PR.
+6. CITATIONS: In "memory_citations", ONLY include memories from the retrieved list that genuinely apply to the code change. If none are applicable, return an empty array [].
 
 You MUST respond strictly with a valid JSON object adhering to this schema:
 {
   "risk_score": number (0 to 100),
   "risk_level": "Low" | "Medium" | "High",
-  "provenance_note": "string (e.g. Detected before merge using historical migration patterns)",
-  "summary": "one-line high impact summary",
+  "provenance_note": "string (e.g. Verified against repository standards and historical patterns)",
+  "summary": "one-line high impact summary of the actual change",
   "findings": [
     {
       "id": "FINDING-1",
       "severity": "HIGH" | "MEDIUM" | "LOW",
-      "title": "Concise finding title",
-      "description": "Detailed explanation of technical failure mode",
+      "title": "Concise finding title directly addressing the changed files",
+      "description": "Detailed explanation of the technical change or potential improvement",
       "source_memory_ids": ["MEM-XXX"]
     }
   ],
@@ -51,54 +85,54 @@ You MUST respond strictly with a valid JSON object adhering to this schema:
     {
       "id": "CI-1",
       "title": "Check title",
-      "description": "Why this automated guardrail is needed",
+      "description": "Why this automated guardrail is helpful",
       "type": "migration-guard" | "linter" | "secret-scan" | "smoke-test",
       "snippet": "Optional YAML or config snippet"
     }
   ],
   "safer_rollout": [
-    "1. Step one...",
-    "2. Step two...",
-    "3. Step three..."
+    "1. Step one addressing actual changes...",
+    "2. Step two..."
   ],
   "memory_citations": [
     {
       "memory_id": "MEM-XXX",
       "title": "Title from evidence",
-      "type": "pr_review" | "pipeline_failure" | "incident" | "post_mortem",
+      "type": "pr_review" | "pipeline_failure" | "incident" | "post_mortem" | "standard",
       "date": "Aug 12",
       "relevance_note": "One line relevance note",
-      "service": "orders-service"
+      "service": "service-name"
     }
   ],
-  "why_recommendation": "Plain language explanation citing exact memory IDs that informed the findings."
+  "why_recommendation": "Plain language explanation of the review assessment grounded in the actual PR diff."
 }`;
 
-const SYSTEM_PROMPT_WITHOUT_MEMORY = `You are a standard generic AI Code Review assistant. You have NO access to organizational memory, past incidents, pipeline logs, or post-mortems.
-Evaluate the code change using only generic general-purpose syntax and lint rules.
+const SYSTEM_PROMPT_WITHOUT_MEMORY = `You are ReVise, an AI Code Review assistant.
+Evaluate the code change using the supplied diff and files without historical memory context.
+Ensure all findings, summaries, and recommendations directly match the actual files changed.
 
 Respond strictly with a valid JSON object:
 {
-  "risk_score": number (e.g. 25-40 for general changes without historical context),
-  "risk_level": "Low" | "Medium",
+  "risk_score": number (0 to 100),
+  "risk_level": "Low" | "Medium" | "High",
   "provenance_note": "Standard static analysis (No historical memory enabled)",
-  "summary": "Generic code review summary without historical context.",
+  "summary": "Concise code review summary matching the supplied diff.",
   "findings": [
     {
       "id": "FINDING-1",
-      "severity": "LOW" | "MEDIUM",
-      "title": "Generic syntax / schema note",
-      "description": "Standard code advice without team context.",
+      "severity": "LOW" | "MEDIUM" | "HIGH",
+      "title": "Finding title grounded in changed code",
+      "description": "Standard code advice matching the diff.",
       "source_memory_ids": []
     }
   ],
   "ci_checks": [],
   "safer_rollout": [
-    "1. Apply migration in test environment.",
-    "2. Deploy to production."
+    "1. Review and verify changes locally.",
+    "2. Run automated test suite."
   ],
   "memory_citations": [],
-  "why_recommendation": "This analysis was conducted without historical memory. Potential organizational hazards or past production incidents cannot be assessed."
+  "why_recommendation": "This analysis was conducted without historical memory. Evaluated based on static best practices."
 }`;
 
 async function callGroqWithBackoff(
@@ -148,18 +182,12 @@ export async function evaluateCodeChange(params: EvaluateChangeParams): Promise<
   model_used: string;
 }> {
   const startTime = Date.now();
-  let modelUsed = GROQ_PRIMARY_MODEL;
 
-  // Build the user prompt
+  // Build the user prompt with budgeted inputs
+  const budgetedCode = budgetCodeSnippet(params.code_snippet, MAX_CODE_SNIPPET_CHARS);
   let evidenceText = '';
   if (params.memory_enabled && params.memories.length > 0) {
-    evidenceText = `RETRIEVED HINDSIGHT EVIDENCE (${params.memories.length} historical memories from bank acme-platform):\n\n`;
-    params.memories.forEach((m, i) => {
-      evidenceText += `[MEMORY #${i + 1}] ID: ${m.id} | TYPE: ${m.type.toUpperCase()} | SERVICE: ${m.service} | DATE: ${m.relative_time || m.timestamp}\n`;
-      evidenceText += `TITLE: ${m.title}\n`;
-      evidenceText += `CONTENT: ${m.content}\n`;
-      evidenceText += `RELEVANCE: ${m.relevance_note || 'Historical evidence'}\n\n`;
-    });
+    evidenceText = budgetMemories(params.memories, MAX_MEMORIES_COUNT);
   }
 
   const userPrompt = `
@@ -167,12 +195,12 @@ SERVICE: ${params.service}
 ENVIRONMENT: ${params.environment}
 REVIEW POLICY: ${params.policy}
 FOCUS AREAS: ${params.focus_areas.join(', ') || 'General Review'}
-FILE: ${params.file_name} (${params.language})
-PULL REQUEST TITLE: ${params.pr_title}
+FILE: ${params.file_name} (${params.language || 'text'})
+PULL REQUEST TITLE: ${params.pr_title || ''}
 
 CHANGESET / DIFF / CODE:
-\`\`\`${params.language.toLowerCase()}
-${params.code_snippet}
+\`\`\`${(params.language || 'text').toLowerCase()}
+${budgetedCode}
 \`\`\`
 
 ${evidenceText}
@@ -219,7 +247,7 @@ Evaluate this change and return the structured JSON object.`;
         };
 
         const latency_ms = Date.now() - startTime;
-        addDiagnosticLog('GROQ_EVAL', params.service, `Evaluated change via model ${candidate} (Memory: ${params.memory_enabled ? 'ON' : 'OFF'})`, latency_ms, true);
+        addDiagnosticLog('GROQ_EVAL', params.service, `Evaluated change via live Groq model ${candidate} (Memory: ${params.memory_enabled ? 'ON' : 'OFF'})`, latency_ms, true);
 
         return {
           output,
@@ -234,52 +262,171 @@ Evaluate this change and return the structured JSON object.`;
 
   // 2. High-Fidelity Deterministic Simulator (Matches exact prompt specs and screenshots for instant testing / offline demo)
   const latency_ms = Date.now() - startTime + (params.memory_enabled ? 340 : 180);
+  const simulatorModel = 'simulator/gpt-oss-120b';
+
+  const snippetLower = (params.code_snippet || '').toLowerCase();
+  const fileLower = (params.file_name || '').toLowerCase();
+  const titleLower = (params.pr_title || '').toLowerCase();
+
+  const isConfigChange =
+    params.focus_areas.includes('Configuration & Tooling') ||
+    fileLower.includes('.git') ||
+    fileLower.includes('.docker') ||
+    fileLower.includes('flake8') ||
+    fileLower.includes('pre-commit') ||
+    snippetLower.includes('.gitignore') ||
+    snippetLower.includes('pre-commit') ||
+    snippetLower.includes('flake8') ||
+    snippetLower.includes('.dockerignore') ||
+    fileLower.endsWith('.md') ||
+    fileLower.endsWith('.yml') ||
+    fileLower.endsWith('.yaml') ||
+    fileLower.endsWith('.toml');
+
+  const isRealOrdersMigration =
+    (snippetLower.includes('alter table') || snippetLower.includes('create index') || fileLower.endsWith('.sql')) &&
+    (snippetLower.includes('orders') || snippetLower.includes('not null') || params.focus_areas.includes('Unsafe DB migration'));
+
+  const isRealSecretIssue =
+    (params.focus_areas.includes('Missing secret') || snippetLower.includes('stripe_') || snippetLower.includes('private_key')) &&
+    (snippetLower.includes('process.env') || snippetLower.includes('secret') || snippetLower.includes('key'));
 
   if (!params.memory_enabled) {
-    // Memory OFF: Generic, low confidence, no memory citations
+    if (isConfigChange) {
+      const output: StructuredAnalysisOutput = {
+        risk_score: 15,
+        risk_level: 'Low',
+        provenance_note: 'Standard static configuration check (Zero historical memory context)',
+        summary: 'Configuration and developer tooling definitions verified against standard syntax rules.',
+        findings: [
+          {
+            id: 'FINDING-1',
+            severity: 'LOW',
+            title: 'Configuration syntax and ignore patterns appear valid.',
+            description: 'Standard static review of ignore rules and tool configurations.',
+            source_memory_ids: [],
+          },
+        ],
+        ci_checks: [],
+        safer_rollout: [
+          '1. Verify formatting and linter locally.',
+          '2. Merge configuration update.',
+        ],
+        memory_citations: [],
+        why_recommendation: 'Configuration reviewed without historical memory context.',
+        memory_enabled: false,
+      };
+      addDiagnosticLog('GROQ_EVAL', params.service, `Evaluated change via deterministic simulator (${simulatorModel}, Memory: OFF)`, latency_ms, true);
+      return { output, latency_ms, model_used: simulatorModel };
+    }
+
+    if (isRealOrdersMigration) {
+      const output: StructuredAnalysisOutput = {
+        risk_score: 35,
+        risk_level: 'Low',
+        provenance_note: 'Standard static syntax check (Zero historical memory context)',
+        summary: 'Basic syntax analysis passed. No historical incident memory was consulted.',
+        findings: [
+          {
+            id: 'FINDING-1',
+            severity: 'LOW',
+            title: 'Syntax and DDL structure appears valid.',
+            description: 'The SQL statement is syntactically correct for PostgreSQL. Standard execution does not inspect table volume or historical lock contention.',
+            source_memory_ids: [],
+          },
+          {
+            id: 'FINDING-2',
+            severity: 'MEDIUM',
+            title: 'Column marked NOT NULL without default value.',
+            description: 'Consider verifying if existing records require default value handling.',
+            source_memory_ids: [],
+          },
+        ],
+        ci_checks: [],
+        safer_rollout: [
+          '1. Apply migration script in local development environment.',
+          '2. Run unit tests to verify column presence.',
+          '3. Merge and trigger deployment pipeline.',
+        ],
+        memory_citations: [],
+        why_recommendation: '⚠️ This analysis used no historical memory. The generic reviewer cannot determine if the table has high row volume or historical lock contention.',
+        memory_enabled: false,
+      };
+      addDiagnosticLog('GROQ_EVAL', params.service, `Evaluated change via deterministic simulator (${simulatorModel}, Memory: OFF)`, latency_ms, true);
+      return { output, latency_ms, model_used: simulatorModel };
+    }
+
     const output: StructuredAnalysisOutput = {
-      risk_score: 35,
+      risk_score: 20,
       risk_level: 'Low',
       provenance_note: 'Standard static syntax check (Zero historical memory context)',
-      summary: 'Basic syntax analysis passed. No historical incident memory was consulted.',
+      summary: `Basic syntax analysis passed for ${params.file_name}.`,
       findings: [
         {
           id: 'FINDING-1',
           severity: 'LOW',
-          title: 'Syntax and DDL structure appears valid.',
-          description: 'The SQL statement is syntactically correct for PostgreSQL. Standard execution does not inspect table volume or historical lock contention.',
-          source_memory_ids: [],
-        },
-        {
-          id: 'FINDING-2',
-          severity: 'MEDIUM',
-          title: 'Column marked NOT NULL without default value.',
-          description: 'Consider verifying if existing records require default value handling.',
+          title: 'Code syntax and structure appear valid.',
+          description: `Standard static review completed for ${params.file_name}.`,
           source_memory_ids: [],
         },
       ],
       ci_checks: [],
       safer_rollout: [
-        '1. Apply migration script in local development environment.',
-        '2. Run unit tests to verify column presence.',
-        '3. Merge and trigger deployment pipeline.',
+        '1. Run unit tests to verify changes.',
+        '2. Merge and trigger deployment.',
       ],
       memory_citations: [],
-      why_recommendation: '⚠️ This analysis used no historical memory. The generic reviewer cannot determine if the orders table has 42 million rows or if similar migrations previously caused production lockouts.',
+      why_recommendation: 'Evaluated based on standard static rules without historical memory context.',
       memory_enabled: false,
     };
-
-    addDiagnosticLog('GROQ_EVAL', params.service, `Evaluated change in Memory-OFF mode`, latency_ms, true);
-    return { output, latency_ms, model_used: 'simulator/gpt-oss-120b' };
+    addDiagnosticLog('GROQ_EVAL', params.service, `Evaluated change via deterministic simulator (${simulatorModel}, Memory: OFF)`, latency_ms, true);
+    return { output, latency_ms, model_used: simulatorModel };
   }
 
-  // Memory ON: High risk, concrete citations, 5-step safer rollout matching screenshot #3
-  const isOrdersMigration = params.code_snippet.toLowerCase().includes('orders') || params.focus_areas.includes('Unsafe DB migration');
-  const isSecretIssue = params.focus_areas.includes('Missing secret') || params.code_snippet.includes('STRIPE_');
-
+  // Memory ON
   let output: StructuredAnalysisOutput;
 
-  if (isOrdersMigration) {
+  if (isConfigChange) {
+    output = {
+      risk_score: 18,
+      risk_level: 'Low',
+      provenance_note: 'Verified against repository hygiene and configuration standards',
+      summary: 'Repository configuration and tooling update: standardized ignore files, linter rules, and pre-commit setup.',
+      findings: [
+        {
+          id: 'FINDING-1',
+          severity: 'LOW',
+          title: 'Ignore files and linter definitions standardized.',
+          description: 'Configures .gitignore, .dockerignore, and .flake8 to prevent accidental commit of cache artifacts and local build outputs.',
+          source_memory_ids: [],
+        },
+        {
+          id: 'FINDING-2',
+          severity: 'LOW',
+          title: 'Pre-commit hook consistency.',
+          description: 'Automates linting and formatting standards across contributor environments before commits are created.',
+          source_memory_ids: [],
+        },
+      ],
+      ci_checks: [
+        {
+          id: 'CI-1',
+          title: 'Pre-commit Lint Validation',
+          description: 'Run pre-commit hooks in CI to verify formatting across pull requests.',
+          type: 'linter',
+          snippet: `name: pre-commit\non: pull_request\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: pre-commit/action@v3.0.1`,
+        },
+      ],
+      safer_rollout: [
+        '1. Run pre-commit run --all-files locally to verify existing codebase formatting.',
+        '2. Verify that ignore patterns do not mask necessary build dependencies or assets.',
+        '3. Merge configuration update and confirm CI workflow passes.',
+      ],
+      memory_citations: [],
+      why_recommendation: 'Configuration and developer tooling updates present minimal operational risk. Recommended steps ensure repository consistency across contributors.',
+      memory_enabled: true,
+    };
+  } else if (isRealOrdersMigration) {
     output = {
       risk_score: 82,
       risk_level: 'High',
@@ -367,7 +514,7 @@ Evaluate this change and return the structured JSON object.`;
       why_recommendation: 'Findings #1 and #2 draw on RUN-889 and INC-024, where an identical synchronous NOT NULL column addition locked the orders table and caused a 22-minute checkout outage. Safer rollout steps 1-5 replicate the validated playbook from PM-024.',
       memory_enabled: true,
     };
-  } else if (isSecretIssue) {
+  } else if (isRealSecretIssue) {
     output = {
       risk_score: 79,
       risk_level: 'High',
@@ -418,44 +565,45 @@ Evaluate this change and return the structured JSON object.`;
     };
   } else {
     output = {
-      risk_score: 68,
-      risk_level: 'Medium',
-      provenance_note: 'Evaluated against historical dependency & API incident history',
-      summary: 'Potential dependency and concurrency risk identified from prior service upgrades.',
+      risk_score: 28,
+      risk_level: 'Low',
+      provenance_note: 'Evaluated against repository standards and engineering best practices',
+      summary: `Code change reviewed for ${params.service}: standard implementation without high-risk operational patterns.`,
       findings: [
         {
           id: 'FINDING-1',
-          severity: 'MEDIUM',
-          title: 'Major version upgrade requires connection pool stress verification.',
-          description: 'Bumping database clients has historically saturated connection limits during traffic spikes.',
-          source_memory_ids: ['MEM-RUN-904'],
+          severity: 'LOW',
+          title: `Code structure in ${params.file_name} aligns with standards.`,
+          description: `No critical anti-patterns, missing secrets, or blocking architectural issues identified for this change.`,
+          source_memory_ids: [],
         },
       ],
       ci_checks: [
         {
           id: 'CI-1',
-          title: 'Connection Pool Load Test',
-          description: 'Run 5-minute sustained load test against staging database pool.',
+          title: 'Automated CI Test Suite',
+          description: 'Run unit and integration test suite before merging.',
           type: 'smoke-test',
         },
       ],
       safer_rollout: [
-        '1. Verify connection pool max limits in staging environment.',
-        '2. Execute automated canary deployment with 5% traffic split.',
+        '1. Run local test suite to verify no regressions.',
+        '2. Deploy to staging environment for verification.',
+        '3. Merge and monitor service telemetry.',
       ],
-      memory_citations: params.memories.slice(0, 3).map(m => ({
+      memory_citations: (params.memories || []).slice(0, 2).map(m => ({
         memory_id: m.id,
         title: m.title,
         type: m.type,
         date: m.relative_time || 'Recent',
-        relevance_note: m.relevance_note || 'Historical context',
+        relevance_note: m.relevance_note || 'Contextual repository memory',
         service: m.service,
       })),
-      why_recommendation: 'Recommendation draws on historical upgrade benchmarks and previous load test failures in inventory-service.',
+      why_recommendation: 'Review conducted against repository conventions and historical context. No matching historical failure signatures detected.',
       memory_enabled: true,
     };
   }
 
-  addDiagnosticLog('GROQ_EVAL', params.service, `Evaluated change via model ${modelUsed} (Memory: ON)`, latency_ms, true);
-  return { output, latency_ms, model_used: 'groq/gpt-oss-120b' };
+  addDiagnosticLog('GROQ_EVAL', params.service, `Evaluated change via deterministic simulator (${simulatorModel}, Memory: ON)`, latency_ms, true);
+  return { output, latency_ms, model_used: simulatorModel };
 }

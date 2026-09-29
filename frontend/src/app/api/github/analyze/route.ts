@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPullDiff, getPullFiles, postPullReview, GitHubFile } from '@/lib/github';
-import { recallMemories } from '@/lib/hindsight';
+import { recallMemories, filterRelevantMemories } from '@/lib/hindsight';
 import { evaluateCodeChange } from '@/lib/groq';
 import { getStore, saveStore, addDiagnosticLog } from '@/lib/storage';
 import { EvaluationRun, FocusArea } from '@/lib/types';
@@ -40,20 +40,25 @@ function detectFocusAreas(files: GitHubFile[], diffText: string): FocusArea[] {
   const areas: FocusArea[] = [];
   const textLower = (diffText + ' ' + files.map(f => f.filename).join(' ')).toLowerCase();
 
-  if (textLower.includes('.sql') || textLower.includes('alter table') || textLower.includes('create index') || textLower.includes('migration')) {
+  if (textLower.includes('.sql') || textLower.includes('alter table') || textLower.includes('create index') || (textLower.includes('migration') && !textLower.includes('pre-commit'))) {
     areas.push('Unsafe DB migration');
   }
-  if (textLower.includes('secret') || textLower.includes('env') || textLower.includes('password') || textLower.includes('api_key') || textLower.includes('token')) {
+  if (textLower.includes('secret') || textLower.includes('password') || textLower.includes('api_key') || textLower.includes('private_key')) {
     areas.push('Missing secret');
   }
-  if (textLower.includes('package.json') || textLower.includes('requirements.txt') || textLower.includes('cargo.toml') || textLower.includes('go.mod')) {
+  if (textLower.includes('package.json') || textLower.includes('requirements.txt') || textLower.includes('cargo.toml') || textLower.includes('go.mod') || textLower.includes('pom.xml')) {
     areas.push('Dependency upgrade');
   }
-  if (textLower.includes('api/') || textLower.includes('route') || textLower.includes('schema') || textLower.includes('endpoint')) {
+  if (textLower.includes('api/') || textLower.includes('routes/') || textLower.includes('controller') || textLower.includes('graphql')) {
     areas.push('API contract change');
   }
+  if (files.some(f => f.filename.includes('.git') || f.filename.includes('.docker') || f.filename.includes('flake8') || f.filename.includes('pre-commit') || f.filename.endsWith('.md') || f.filename.endsWith('.yml') || f.filename.endsWith('.yaml') || f.filename.endsWith('.json') || f.filename.endsWith('.toml'))) {
+    if (areas.length === 0) {
+      areas.push('Configuration & Tooling');
+    }
+  }
 
-  return areas.length > 0 ? areas : ['Unsafe DB migration'];
+  return areas.length > 0 ? areas : ['General Review'];
 }
 
 export async function POST(req: NextRequest) {
@@ -131,24 +136,40 @@ export async function POST(req: NextRequest) {
 
     // 5. Memory Retrieval (if memory is enabled)
     let retrievedMemories: any[] = [];
+    let relevantMemories: any[] = [];
+    let excludedMemories: any[] = [];
     let retrievalLatency = 0;
 
     if (memoryEnabled) {
       const recallQuery = `${cleanRepo} PR #${pullNumber} ${files.map(f => f.filename).slice(0, 5).join(' ')} ${diffContent.slice(0, 150)}`;
+      const focusFilter = (focusAreas[0] === 'General Review' || focusAreas[0] === 'Configuration & Tooling') ? undefined : focusAreas[0];
       const recallResult = await recallMemories(
         recallQuery,
         {
           service: serviceName,
-          focus_area: focusAreas[0],
+          focus_area: focusFilter,
           top_k: 4,
         },
         targetBankId
       );
       retrievedMemories = recallResult.memories;
       retrievalLatency = recallResult.retrieval_latency_ms;
+
+      // Filter and rank for strict relevance against the current PR files and diff
+      const filterResult = filterRelevantMemories(retrievedMemories, {
+        service: serviceName,
+        files,
+        diff_content: diffContent,
+        focus_areas: focusAreas,
+        language: primaryLang,
+        pr_title: prTitle,
+      });
+
+      relevantMemories = filterResult.relevant;
+      excludedMemories = filterResult.excluded;
     }
 
-    // 6. Call Groq with structured output schema & memory injection
+    // 6. Call Groq with structured output schema & relevant memory injection
     const evalResult = await evaluateCodeChange({
       pr_title: prTitle,
       service: serviceName,
@@ -158,13 +179,21 @@ export async function POST(req: NextRequest) {
       code_snippet: diffContent,
       file_name: primaryFile,
       language: primaryLang,
-      memories: retrievedMemories,
+      memories: relevantMemories,
       memory_enabled: memoryEnabled,
     });
 
     const output = evalResult.output;
     const totalLatency = Date.now() - startTime;
     const runId = `run-gh-${cleanOwner}-${cleanRepo}-${pullNumber}-${Date.now().toString(36)}`;
+    const filesCount = files.length;
+    const linesChanged = files.reduce((acc, f) => acc + (f.additions || 0) + (f.deletions || 0), 0);
+    const changedFilesList = files.map(f => ({
+      filename: f.filename,
+      additions: f.additions || 0,
+      deletions: f.deletions || 0,
+      status: f.status,
+    }));
 
     // 7. Determine status
     let status: EvaluationRun['status'] = 'SAFE';
@@ -193,8 +222,13 @@ export async function POST(req: NextRequest) {
       memory_enabled: memoryEnabled,
       retrieved_memories_count: retrievedMemories.length,
       retrieved_memory_ids: retrievedMemories.map(m => m.id),
+      relevant_memories_count: relevantMemories.length,
+      excluded_memories_count: excludedMemories.length,
       output,
       execution_latency_ms: totalLatency,
+      files_changed: filesCount,
+      lines_changed: linesChanged,
+      changed_files: changedFilesList,
     };
 
     const store = getStore();
@@ -207,7 +241,7 @@ export async function POST(req: NextRequest) {
     addDiagnosticLog(
       'GROQ_EVAL',
       serviceName,
-      `Evaluated GitHub PR #${pullNumber} for ${cleanOwner}/${cleanRepo} (Risk: ${output.risk_score}/100, Memory: ${memoryEnabled ? 'ON' : 'OFF'})`,
+      `Evaluated GitHub PR #${pullNumber} for ${cleanOwner}/${cleanRepo} (Risk: ${output.risk_score}/100, Memory: ${memoryEnabled ? 'ON' : 'OFF'}, ${relevantMemories.length}/${retrievedMemories.length} relevant)`,
       totalLatency,
       true
     );
@@ -248,7 +282,13 @@ ${output.safer_rollout.map(s => `- ${s}`).join('\n')}${citationsText}
       run: newRun,
       review: output,
       diff_truncated: diffTruncated,
-      files_analyzed_count: files.length,
+      files_analyzed_count: filesCount,
+      lines_changed: linesChanged,
+      files: changedFilesList,
+      retrieved_memories_count: retrievedMemories.length,
+      relevant_memories_count: relevantMemories.length,
+      excluded_memories_count: excludedMemories.length,
+      excluded_memories: excludedMemories,
       github_comment_posted: gitHubReviewPosted,
       github_review_id: gitHubReviewId,
       retrieval_latency_ms: retrievalLatency,

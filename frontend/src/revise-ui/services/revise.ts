@@ -20,19 +20,26 @@ function mapMemoryCitation(m: any) {
   };
 }
 
-function mapRunToReview(run: any, reference = "ReVise") : Review {
+function mapRunToReview(run: any, reference = "ReVise", meta?: { filesChanged?: number; linesChanged?: number; changedFiles?: any[]; totalRetrievedMemories?: number; relevantMemoriesCount?: number; excludedMemoriesCount?: number }) : Review {
   const output = run.output || {};
   const riskLevel = output.risk_level || (run.status === "HIGH RISK" ? "High" : run.status === "MEDIUM RISK" ? "Medium" : "Low");
   const findings = (output.findings || []).map((f: any, i: number) => ({
     id: f.id || `finding-${i}`,
     severity: ({ HIGH: "High", MEDIUM: "Medium", LOW: "Low" } as any)[String(f.severity || "MEDIUM")] || "Medium",
-    file: run.file_name || "changed file",
-    line: 0,
+    file: f.file || run.file_name || "changed file",
+    line: f.line || 0,
     problem: f.title || f.description || "Review finding",
     impact: f.impact || "Potential engineering risk identified by the review.",
     fix: f.description || "Review the finding and apply the recommended remediation.",
   }));
   const memoriesMapped = (output.memory_citations || []).map(mapMemoryCitation);
+  const filesChanged = meta?.filesChanged ?? run.files_changed ?? (run.changed_files ? run.changed_files.length : (run.file_name ? 1 : 0));
+  const linesChanged = meta?.linesChanged ?? run.lines_changed ?? 0;
+  const changedFiles = meta?.changedFiles ?? run.changed_files ?? (run.file_name ? [{ filename: run.file_name, additions: 0, deletions: 0 }] : []);
+  const totalRetrievedMemories = meta?.totalRetrievedMemories ?? run.retrieved_memories_count ?? (run.retrieved_memory_ids?.length || 0);
+  const relevantMemoriesCount = meta?.relevantMemoriesCount ?? run.relevant_memories_count ?? memoriesMapped.length;
+  const excludedMemoriesCount = meta?.excludedMemoriesCount ?? run.excluded_memories_count ?? 0;
+
   return {
     id: run.id,
     pullRequest: {
@@ -42,28 +49,44 @@ function mapRunToReview(run: any, reference = "ReVise") : Review {
       author: { id: "revise", name: "ReVise", handle: "ReVise" },
       repository: { id: "repo", owner: reference.split("/")[0] || "local", name: reference.split("/")[1]?.split(" ")[0] || "repository", branch: "main", visibility: "Public" },
       status: "Open",
-      filesChanged: 0,
-      linesChanged: 0,
+      filesChanged,
+      linesChanged,
     },
     risk: { score: Number(output.risk_score || 0), level: riskLevel as any },
     status: run.status === "HIGH RISK" || run.status === "MEDIUM RISK" ? "Complete" : "Complete",
     summary: output.summary || "ReVise completed a memory-informed code review.",
     findings,
     memories: memoriesMapped,
+    totalRetrievedMemories,
+    relevantMemoriesCount,
+    excludedMemoriesCount,
+    saferRollout: output.safer_rollout || [],
+    whyRecommendation: output.why_recommendation || "",
+    changedFiles,
     createdAt: run.created_at || new Date().toISOString(),
   };
 }
 
 export async function analyzePullRequest(reference: string): Promise<Review> {
-  const match = reference.match(/(?:https?:\/\/github\.com\/)?([^\s/]+)\/([^\s·#]+).*?(?:PR\s*#?\s*|#)(\d+)/i);
-  if (!match) throw new Error("Use a GitHub reference such as owner/repository · PR 12.");
+  const trimmed = reference.trim();
+  const urlMatch = trimmed.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/([^\s/]+)\/([^\s/]+)\/pull\/(\d+)/i);
+  const shorthandMatch = trimmed.match(/^([^\s/]+)\/([^\s·#/]+).*?(?:PR\s*#?\s*|#)(\d+)/i);
+  const match = urlMatch || shorthandMatch;
+  if (!match) throw new Error("Use a GitHub reference such as owner/repository · PR 12 or https://github.com/owner/repository/pull/123.");
   const [, owner, repo, pr] = match;
   const result = await request<any>("/api/github/analyze", {
     method: "POST",
     body: JSON.stringify({ owner, repo, pullNumber: Number(pr), memoryEnabled: true, postToGitHub: false }),
   });
   if (!result.success) throw new Error(result.error || "GitHub review failed");
-  return mapRunToReview(result.run, `${owner}/${repo}`);
+  return mapRunToReview(result.run, `${owner}/${repo}`, {
+    filesChanged: result.files_analyzed_count,
+    linesChanged: result.lines_changed,
+    changedFiles: result.files,
+    totalRetrievedMemories: result.retrieved_memories_count,
+    relevantMemoriesCount: result.relevant_memories_count,
+    excludedMemoriesCount: result.excluded_memories_count,
+  });
 }
 
 export async function analyzeCode(code: string): Promise<Review> {
@@ -74,7 +97,7 @@ export async function analyzeCode(code: string): Promise<Review> {
       service: "local-code",
       environment: "Production",
       policy: "Strict production policy",
-      focus_areas: ["API contract change"],
+      focus_areas: ["General Review"],
       code_snippet: code,
       file_name: "snippet.ts",
       language: "TypeScript",
