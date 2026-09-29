@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Badge, Button, Card, CodeBlock, DiffViewer, EmptyState, ErrorState, FindingCard, Heading, Input, LoadingState, MemoryEvidence, RecommendationCard, RiskScore, SectionHeader, Select, Tabs, Text, Textarea, Toast, TypingIndicator } from "../components/ui";
-import { getMemoriesStrict, getRunReview, getSettings, getStandardsStrict, saveSettings, sendPairMessage } from "../services/revise";
-import type { EngineeringStandard, Memory, Review, SettingsSections } from "../types";
+import { getMemoriesStrict, getPairProgrammerContext, getRunReview, getSettings, getStandardsStrict, saveSettings, sendPairMessage } from "../services/revise";
+import type { EngineeringStandard, Memory, PairProgrammerContext, Review, SettingsSections } from "../types";
 
 const editorCode = `import { validateSession } from "./validate"
 
@@ -16,52 +16,280 @@ export async function updateSession(input: SessionInput) {
   return current
 }`;
 
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+}
+
 export function PairProgrammerPage() {
   const [mobileTab, setMobileTab] = useState("Editor");
+  const [context, setContext] = useState<PairProgrammerContext | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [loadingContext, setLoadingContext] = useState(true);
   const [message, setMessage] = useState("");
-  // The greeting is real service state, not a scripted conversation: it reports
-  // whether the Aider backend actually answered and what this page can do.
-  const [reply, setReply] = useState("Checking the Aider service…");
-  const [aiderState, setAiderState] = useState<"checking" | "connected" | "offline">("checking");
-  const [memories, setMemories] = useState<Memory[] | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const loadContext = async (targetRunId?: string) => {
+    setLoadingContext(true);
+    try {
+      const data = await getPairProgrammerContext(targetRunId);
+      if (data) {
+        setContext(data);
+        if (data.changed_files && data.changed_files.length > 0) {
+          setSelectedFile(data.changed_files[0].filename);
+        } else if (data.file_name) {
+          setSelectedFile(data.file_name);
+        }
+        const prLabel = data.pull_number
+          ? `PR #${data.pull_number} (${data.owner ? `${data.owner}/${data.repo}` : data.service})`
+          : data.service;
+        let welcome = "";
+        if (data.findings && data.findings.length > 0) {
+          welcome = `I've loaded the analysis for ${prLabel} (Risk: ${data.risk_score}/100, ${data.findings.length} findings, ${data.relevant_memories_count} relevant memories).\n\nAsk me why this is an issue, how to fix it safely, or why ReVise recommended this rollout.`;
+        } else {
+          welcome = `I've loaded the analysis for ${prLabel} (Risk: ${data.risk_score}/100 - ${data.risk_level} Risk). All checks passed.\n\nAsk me any questions about the changes or historical engineering context.`;
+        }
+        setMessages([{ id: "welcome", role: "assistant", text: welcome }]);
+      } else {
+        setContext(null);
+        setMessages([{
+          id: "empty",
+          role: "assistant",
+          text: "No previous PR review found. Analyze a pull request in PR Review or Analyze Code to load analysis context.",
+        }]);
+      }
+    } catch {
+      setContext(null);
+    } finally {
+      setLoadingContext(false);
+    }
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    // The old "Aider connected" badge was a hardcoded constant. Ask the health
-    // endpoint so the badge reflects whether the backend actually answered.
-    fetch("/api/aider/health")
-      .then(response => (response.ok ? response.json() : Promise.reject(new Error(`Aider service responded with HTTP ${response.status}`))))
-      .then(data => { if (!cancelled) setAiderState(data.connected ? "connected" : "offline"); })
-      .catch(() => { if (!cancelled) setAiderState("offline"); });
-    getMemoriesStrict()
-      .then(items => { if (!cancelled) setMemories(items); })
-      .catch(() => { if (!cancelled) setMemories([]); });
-    return () => { cancelled = true; };
+    const getRunIdFromUrl = () => {
+      if (typeof window !== "undefined") {
+        return new URLSearchParams(window.location.search).get("runId") || undefined;
+      }
+      return undefined;
+    };
+
+    loadContext(getRunIdFromUrl());
+
+    const handlePopState = () => {
+      loadContext(getRunIdFromUrl());
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!message.trim()) return;
+    const clean = message.trim();
+    if (!clean || loading) return;
+
+    const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: "user", text: clean };
+    setMessages(prev => [...prev, userMsg]);
+    setMessage("");
     setLoading(true);
-    setError(null);
+
     try {
-      setReply(await sendPairMessage(message));
-      setMessage("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "The pair assistant could not answer. Try again.");
+      const replyText = await sendPairMessage(clean, context?.run_id);
+      const assistantMsg: ChatMessage = { id: `assistant-${Date.now()}`, role: "assistant", text: replyText };
+      setMessages(prev => [...prev, assistantMsg]);
+    } catch {
+      const errorMsg: ChatMessage = {
+        id: `err-${Date.now()}`,
+        role: "assistant",
+        text: "Could not reach pair assistant. Please check your connection and try again.",
+      };
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setLoading(false);
     }
   }
 
-  const memoryCount = memories?.length ?? 0;
-  const topMemories = (memories ?? []).slice(0, 3);
-  const files = <Card className="h-full p-3"><Text className="mb-3 px-2 font-mono text-[10px] uppercase tracking-wider text-muted">Files</Text>{["src/auth/session.ts", "src/api/review.ts", "src/memory/recall.ts", "src/services/github.ts", "README.md"].map((file, index) => <Button key={file} variant="ghost" className={`w-full justify-start px-2 font-mono text-xs ${index === 0 ? "bg-brand-soft text-brand" : ""}`}>{file}</Button>)}</Card>;
-  const editor = <Card className="h-full min-w-0 p-0"><div className="flex items-center justify-between border-b border-line px-4 py-2"><span className="font-mono text-xs text-ink">session.ts</span><Badge>Sample</Badge></div><div className="max-h-[37rem] overflow-auto"><CodeBlock code={editorCode}/></div><Text className="border-t border-line px-4 py-3 text-xs text-muted">Sample file shown for demonstration. Connect the Aider service and run it against a real checkout to edit live code.</Text></Card>;
-  const assistant = <Card className="flex h-full min-h-[36rem] flex-col p-0"><div className="border-b border-line p-4"><div className="flex items-center justify-between"><Heading level={3} className="text-sm">AI Pair Programmer</Heading>{aiderState === "checking" ? <Badge>Checking…</Badge> : aiderState === "connected" ? <Badge tone="success">Aider connected</Badge> : <Badge tone="warning">Aider offline</Badge>}</div><Text className="mt-1 text-xs text-muted">ReVise memory active · answers recall stored engineering memory</Text></div><div className="flex-1 space-y-4 overflow-y-auto p-4">{loading ? <TypingIndicator/> : <div key={reply} className="message-motion rounded-md bg-surface-raised p-3 text-sm leading-6 text-muted">{reply}</div>}{error && <Text className="text-sm text-danger">{error}</Text>}<div className="rounded-md border border-brand/25 bg-brand-soft p-3"><Text className="text-xs font-semibold text-brand">{memories === null ? "Loading engineering memories…" : `Using ${memoryCount} stored engineering memor${memoryCount === 1 ? "y" : "ies"}`}</Text>{topMemories.length > 0 && <div className="mt-2 space-y-2 font-mono text-[10px] text-muted">{topMemories.map(item => <Text key={item.id} className="memory-chip">{item.title} · {item.confidence}%</Text>)}</div>}</div><RecommendationCard title="Validate before mutation" detail="Move validateSession above applySessionMutation to match the team’s fail-closed authentication standard."/></div><form onSubmit={submit} className="border-t border-line p-3"><Textarea aria-label="Ask pair programmer" className="min-h-20" placeholder="Ask ReVise about this code…" value={message} onChange={event => setMessage(event.target.value)}/><Button className="mt-2 w-full" type="submit" disabled={loading || !message.trim()}>{loading ? "Thinking with memory…" : "Send message"}</Button></form></Card>;
-  return <div className="animate-enter"><SectionHeader eyebrow="Memory-aware coding" title="AI Pair Programmer" action={memories === null ? <Badge>Checking memory…</Badge> : <Badge tone="brand">{memoryCount} memories in context</Badge>}/><div className="mb-4 lg:hidden"><Tabs tabs={["Files", "Editor", "Assistant"]} active={mobileTab} onChange={setMobileTab}/></div><div className="hidden h-[calc(100vh-10rem)] min-h-[38rem] grid-cols-[13rem_minmax(0,1fr)_22rem] gap-3 lg:grid">{files}{editor}{assistant}</div><div className="lg:hidden">{mobileTab === "Files" ? files : mobileTab === "Editor" ? editor : assistant}</div></div>;
+  const fileList = context?.changed_files && context.changed_files.length > 0
+    ? context.changed_files.map(f => f.filename)
+    : context?.file_name ? [context.file_name] : ["changeset.diff"];
+
+  const activeFile = selectedFile || fileList[0] || "changeset.diff";
+
+  const files = (
+    <Card className="h-full p-3">
+      <div className="mb-3 flex items-center justify-between px-2">
+        <Text className="font-mono text-[10px] uppercase tracking-wider text-muted">Changed Files</Text>
+        <span className="font-mono text-[10px] text-muted">{fileList.length}</span>
+      </div>
+      <div className="space-y-1">
+        {fileList.map((file) => (
+          <Button
+            key={file}
+            variant="ghost"
+            onClick={() => setSelectedFile(file)}
+            className={`w-full justify-start px-2 font-mono text-xs ${activeFile === file ? "bg-brand-soft text-brand" : ""}`}
+          >
+            <span className="truncate">{file}</span>
+          </Button>
+        ))}
+      </div>
+    </Card>
+  );
+
+  const displayedCode = context?.code_snippet || editorCode;
+  const issuesCount = context?.findings ? context.findings.length : 0;
+  const riskTone = (context?.risk_score ?? 0) >= 70 ? "danger" : (context?.risk_score ?? 0) >= 40 ? "warning" : "success";
+
+  const editor = (
+    <Card className="h-full min-w-0 p-0">
+      <div className="flex items-center justify-between border-b border-line px-4 py-2">
+        <span className="font-mono text-xs text-ink">{activeFile}</span>
+        <Badge tone={issuesCount > 0 ? (riskTone as any) : "success"}>
+          {issuesCount} {issuesCount === 1 ? "issue" : "issues"}
+        </Badge>
+      </div>
+      <div className="max-h-[37rem] overflow-auto">
+        <CodeBlock code={displayedCode} />
+      </div>
+    </Card>
+  );
+
+  const prHeader = context?.pull_number
+    ? `PR #${context.pull_number} · ${context.owner ? `${context.owner}/${context.repo}` : context.service}`
+    : context?.service
+    ? `${context.file_name} · ${context.service}`
+    : "ReVise Memory Session";
+
+  const assistant = (
+    <Card className="flex h-full min-h-[36rem] flex-col p-0">
+      <div className="border-b border-line p-4">
+        <div className="flex items-center justify-between">
+          <Heading level={3} className="text-sm">AI Pair Programmer</Heading>
+          <Badge tone="brand">ReVise memory active</Badge>
+        </div>
+        <Text className="mt-1 text-xs text-muted">Context: {prHeader}</Text>
+      </div>
+      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        {/* Provenance Banner */}
+        {context && (
+          <div className="rounded-md border border-line bg-surface-low p-2.5 font-mono text-[10px] text-muted space-y-1">
+            <div className="flex items-center justify-between text-attention font-semibold">
+              <span>CONTEXT</span>
+              <span className="truncate max-w-[150px]">{context.run_id ? context.run_id.slice(0, 20) + "…" : "live"}</span>
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted">
+              <span>{prHeader}</span>
+              <span className="text-brand">{context.relevant_memories_count} relevant memories</span>
+              <span>{context.findings.length} findings</span>
+              <span>Risk: {context.risk_score}/100</span>
+            </div>
+          </div>
+        )}
+
+        {/* Message Log */}
+        {messages.map((msg) => (
+          <div
+            key={msg.id}
+            className={`message-motion rounded-md p-3 text-sm leading-6 whitespace-pre-wrap ${
+              msg.role === "user"
+                ? "bg-brand/10 border border-brand/20 text-ink font-medium"
+                : "bg-surface-raised text-muted"
+            }`}
+          >
+            {msg.text}
+          </div>
+        ))}
+        {loading && <TypingIndicator label="Thinking with PR analysis & memory…" />}
+
+        {/* Grounded Memory Evidence */}
+        <div className="rounded-md border border-brand/25 bg-brand-soft p-3">
+          <Text className="text-xs font-semibold text-brand">
+            {context && context.relevant_memories && context.relevant_memories.length > 0
+              ? `Based on the latest PR analysis, ReVise found ${context.relevant_memories.length} relevant engineering ${context.relevant_memories.length === 1 ? "memory" : "memories"}.`
+              : "No relevant Hindsight memories matched this change."}
+          </Text>
+          {context && context.relevant_memories && context.relevant_memories.length > 0 && (
+            <div className="mt-2 space-y-2 font-mono text-[10px] text-muted">
+              {context.relevant_memories.map((m, idx) => (
+                <div key={m.memory_id || idx} className="memory-chip flex items-center justify-between gap-2">
+                  <span className="truncate">{m.title}</span>
+                  <span className="shrink-0 text-brand font-semibold">{m.relevance_score ? `${Math.round(m.relevance_score * 100)}%` : m.type}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Safer Rollout / Recommendation Card */}
+        {context?.safer_rollout && context.safer_rollout.length > 0 ? (
+          <RecommendationCard
+            title="Safer rollout recommendation"
+            detail={context.safer_rollout.slice(0, 2).join(" ")}
+          />
+        ) : context?.why_recommendation ? (
+          <RecommendationCard
+            title="Review recommendation"
+            detail={context.why_recommendation}
+          />
+        ) : null}
+      </div>
+
+      <form onSubmit={submit} className="border-t border-line p-3">
+        <Textarea
+          aria-label="Ask pair programmer"
+          className="min-h-20"
+          placeholder="Ask ReVise about this code, findings, or safer rollout…"
+          value={message}
+          onChange={event => setMessage(event.target.value)}
+        />
+        <Button className="mt-2 w-full" disabled={loading || loadingContext || !message.trim()}>
+          {loading ? "Thinking with memory…" : "Send message"}
+        </Button>
+      </form>
+    </Card>
+  );
+
+  const memCount = context?.relevant_memories_count ?? 0;
+
+  return (
+    <div className="animate-enter">
+      <SectionHeader
+        eyebrow="Memory-aware coding"
+        title="AI Pair Programmer"
+        action={
+          <div className="flex items-center gap-2">
+            <Badge tone="brand">
+              {memCount} {memCount === 1 ? "memory" : "memories"} in context
+            </Badge>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const runId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("runId") || undefined : undefined;
+                loadContext(runId);
+              }}
+              disabled={loadingContext}
+              className="text-xs"
+            >
+              {loadingContext ? "Refreshing…" : "↻ Refresh context"}
+            </Button>
+          </div>
+        }
+      />
+      <div className="mb-4 lg:hidden">
+        <Tabs tabs={["Files", "Editor", "Assistant"]} active={mobileTab} onChange={setMobileTab} />
+      </div>
+      <div className="hidden h-[calc(100vh-10rem)] min-h-[38rem] grid-cols-[13rem_minmax(0,1fr)_22rem] gap-3 lg:grid">
+        {files}
+        {editor}
+        {assistant}
+      </div>
+      <div className="lg:hidden">
+        {mobileTab === "Files" ? files : mobileTab === "Editor" ? editor : assistant}
+      </div>
+    </div>
+  );
 }
 
 export function ReportPage() {
@@ -84,7 +312,6 @@ export function ReportPage() {
   }, []);
 
   if (loading) return <LoadingState label="Loading the stored review…"/>;
-  // An unknown id used to render a plausible-looking report that never existed.
   if (!review) return <EmptyState title="Review not found" detail={`${error || "This review is not in the store."} Requested id: ${reviewId || "(none)"}. Open a report from the runs list rather than typing an id.`}/>;
 
   const repository = [review.pullRequest.repository.owner, review.pullRequest.repository.name].filter(Boolean).join("/");
@@ -111,8 +338,6 @@ export function StandardsPage() {
   function load() {
     setStandards(null);
     setError(null);
-    // Strict read with a real error state: a dead endpoint must not quietly
-    // swap in the demo standard cards as though they were active policy.
     getStandardsStrict()
       .then(setStandards)
       .catch(err => setError(err instanceof Error ? err.message : "Could not load engineering standards."));
@@ -142,8 +367,6 @@ export function SettingsPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Whatever is genuinely stored for this tab, so the form shows real values
-  // instead of defaults that look saved but were never sent anywhere.
   const stored = settings[tab] || {};
   const modelOptions = ["ReVise Review Large", "ReVise Review Fast"];
   const behaviorOptions = tab === "Memory"
@@ -164,7 +387,6 @@ export function SettingsPage() {
       setSettings(previous => ({ ...previous, [tab]: { ...(previous[tab] || {}), ...values } }));
       setStatus({ ok: true, message: `${tab} settings saved.` });
     } catch (error: unknown) {
-      // Report the server's reason rather than claiming the save worked.
       setStatus({ ok: false, message: error instanceof Error ? error.message : "Could not save settings." });
     } finally {
       setSaving(false);

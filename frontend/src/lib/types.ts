@@ -130,6 +130,9 @@ export interface StructuredAnalysisOutput {
 
 export interface EvaluationRun {
   id: string;
+  owner?: string;
+  repo?: string;
+  pull_number?: number;
   created_at: string;
   relative_time: string;
   status: 'HIGH RISK' | 'LEARNED' | 'RESOLVED' | 'SAFE' | 'MEDIUM RISK';
@@ -156,6 +159,46 @@ export interface EvaluationRun {
   output: StructuredAnalysisOutput;
   execution_latency_ms: number;
   changed_files?: Array<{ filename: string; additions: number; deletions: number; status?: string }>;
+}
+
+export interface PairProgrammerContext {
+  run_id: string;
+  owner?: string;
+  repo?: string;
+  pull_number?: number;
+  service: string;
+  title: string;
+  risk_score: number;
+  risk_level: 'Low' | 'Medium' | 'High';
+  summary: string;
+  findings: Finding[];
+  changed_files: Array<{ filename: string; additions: number; deletions: number; status?: string }>;
+  files_changed: number;
+  lines_changed: number;
+  relevant_memories: MemoryCitation[];
+  retrieved_memories_count: number;
+  relevant_memories_count: number;
+  excluded_memories_count: number;
+  safer_rollout: string[];
+  why_recommendation: string;
+  focus_areas: string[];
+  code_snippet: string;
+  file_name: string;
+  language: string;
+  created_at: string;
+  memory_enabled: boolean;
+}
+
+export interface PairProgrammerChatRequest {
+  runId?: string;
+  message: string;
+}
+
+export interface PairProgrammerChatResponse {
+  success: boolean;
+  message: string;
+  run_id?: string | null;
+  error?: string;
 }
 
 export interface CausalTimelineNode {

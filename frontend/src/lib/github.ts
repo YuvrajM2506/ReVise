@@ -65,8 +65,24 @@ const GITHUB_API_BASE = 'https://api.github.com';
 const GITHUB_API_VERSION = '2022-11-28';
 
 /**
- * ReVise reads GitHub anonymously: no token is ever sent. Public repositories
- * only, subject to GitHub's 60 requests/hour anonymous rate limit.
+ * Safe diagnostic helper that reports token presence and length without exposing the token value.
+ */
+export function getGitHubAuthStatus(): {
+  configured: boolean;
+  tokenLength: number;
+  authorizationAttached: boolean;
+} {
+  const token = process.env.GITHUB_TOKEN?.trim() || '';
+  return {
+    configured: Boolean(token),
+    tokenLength: token.length,
+    authorizationAttached: Boolean(token),
+  };
+}
+
+/**
+ * Constructs standard headers for GitHub REST API requests.
+ * Attaches Authorization header if GITHUB_TOKEN is configured.
  */
 function gitHubHeaders(accept: string, withJsonBody = false): Record<string, string> {
   const headers: Record<string, string> = {
@@ -74,6 +90,10 @@ function gitHubHeaders(accept: string, withJsonBody = false): Record<string, str
     'X-GitHub-Api-Version': GITHUB_API_VERSION,
     'User-Agent': 'ReVise-Code-Review-Agent',
   };
+  const token = process.env.GITHUB_TOKEN?.trim();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   if (withJsonBody) headers['Content-Type'] = 'application/json';
   return headers;
 }
@@ -96,6 +116,7 @@ function validatePullNumber(pullNumber: number): void {
 async function handleGitHubError(response: Response, actionDescription: string): Promise<never> {
   const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
   const rateLimitReset = response.headers.get('x-ratelimit-reset');
+  const hasToken = Boolean(process.env.GITHUB_TOKEN?.trim());
 
   let errorMessage = '';
   try {
@@ -110,19 +131,20 @@ async function handleGitHubError(response: Response, actionDescription: string):
   }
 
   if (response.status === 401) {
-    throw new Error(`GitHub rejected the credentials while ${actionDescription}. ReVise reads GitHub anonymously, so only public repositories are available.`);
+    throw new Error(`GitHub rejected the credentials (401) while ${actionDescription}. Please check GITHUB_TOKEN validity and scopes.`);
   }
 
   if (response.status === 403 || response.status === 429) {
     if (rateLimitRemaining === '0') {
       const resetTime = rateLimitReset ? new Date(parseInt(rateLimitReset, 10) * 1000).toISOString() : 'unknown';
-      throw new Error(`GitHub's anonymous rate limit (60 requests/hour) was exceeded while ${actionDescription}. Limit resets at: ${resetTime}.`);
+      const limitType = hasToken ? 'authenticated rate limit (5,000 req/hr)' : "anonymous rate limit (60 requests/hour)";
+      throw new Error(`GitHub's ${limitType} was exceeded while ${actionDescription}. Limit resets at: ${resetTime}.`);
     }
-    throw new Error(`GitHub refused the request (${response.status}) while ${actionDescription}: ${errorMessage || 'access denied'}. ReVise reads GitHub anonymously, so private repositories are unavailable.`);
+    throw new Error(`GitHub refused the request (${response.status}) while ${actionDescription}: ${errorMessage || 'access denied'}.`);
   }
 
   if (response.status === 404) {
-    throw new Error(`GitHub resource not found (404) while ${actionDescription}. Check the owner, repository and pull request number, and note that ReVise reads public repositories anonymously.`);
+    throw new Error(`GitHub resource not found (404) while ${actionDescription}. Check that the owner, repository, and pull request number exist and your token has repository access.`);
   }
 
   throw new Error(`GitHub API error (${response.status}) while ${actionDescription}: ${errorMessage || response.statusText}`);
@@ -232,6 +254,26 @@ export async function postPullReview(
     throw new Error('Review comment body cannot be empty.');
   }
 
-  // Anonymous access can read public repositories but cannot write to them.
-  throw new Error('Posting reviews back to GitHub requires authenticated access, which this build does not support. Share the ReVise report instead.');
+  const token = process.env.GITHUB_TOKEN?.trim();
+  if (!token) {
+    throw new Error('Posting reviews back to GitHub requires GITHUB_TOKEN to be configured.');
+  }
+
+  const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner.trim())}/${encodeURIComponent(repo.trim())}/pulls/${pullNumber}/reviews`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: gitHubHeaders('application/vnd.github+json', true),
+    body: JSON.stringify({
+      body: reviewBody,
+      event: 'COMMENT',
+    }),
+  });
+
+  if (!response.ok) {
+    await handleGitHubError(response, `posting review on PR #${pullNumber} in ${owner}/${repo}`);
+  }
+
+  const review: GitHubReview = await response.json();
+  return review;
 }

@@ -250,6 +250,9 @@ export async function POST(req: NextRequest) {
     // 8. Persist evaluation run
     const newRun: EvaluationRun = {
       id: runId,
+      owner: cleanOwner,
+      repo: cleanRepo,
+      pull_number: pullNumber,
       created_at: new Date().toISOString(),
       relative_time: 'Just now',
       status,

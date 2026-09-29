@@ -1,5 +1,5 @@
 import { countChangeStats } from "@/lib/diff-stats";
-import type { CICheck, EngineeringStandard, Memory, Review, SettingsSections, TimelineEvent } from "../types";
+import type { CICheck, EngineeringStandard, Memory, PairProgrammerContext, Review, SettingsSections, TimelineEvent } from "../types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...init });
@@ -235,11 +235,29 @@ export async function getStandardsStrict(): Promise<EngineeringStandard[]> {
   return mapStandards(result);
 }
 
-export async function sendPairMessage(message: string): Promise<string> {
+export async function getPairProgrammerContext(runId?: string): Promise<PairProgrammerContext | null> {
   try {
-    const result = await request<{ message: string }>("/api/aider/chat", { method: "POST", body: JSON.stringify({ message }) });
+    const url = runId ? `/api/pair-programmer/context?runId=${encodeURIComponent(runId)}` : `/api/pair-programmer/context`;
+    const result = await request<{ success: boolean; context: PairProgrammerContext }>(url);
+    if (result && result.success && result.context) {
+      return result.context;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function sendPairMessage(message: string, runId?: string): Promise<string> {
+  try {
+    const result = await request<{ success: boolean; message: string }>("/api/pair-programmer/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, runId }),
+    });
     return result.message;
-  } catch { return "ReVise could not reach the memory-aware pair assistant. Check the Next.js server and try again."; }
+  } catch {
+    return "ReVise could not reach the memory-aware pair assistant. Check the Next.js server and try again.";
+  }
 }
 
 export async function getSettings(): Promise<SettingsSections> {

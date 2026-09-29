@@ -1,4 +1,4 @@
-import { StructuredAnalysisOutput, MemoryItem, Finding, CICheckRecommendation, MemoryCitation } from './types';
+import { StructuredAnalysisOutput, MemoryItem, Finding, CICheckRecommendation, MemoryCitation, EvaluationRun } from './types';
 import { addDiagnosticLog } from './storage';
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
@@ -153,24 +153,29 @@ Respond strictly with a valid JSON object:
 async function callGroqWithBackoff(
   messages: Array<{ role: string; content: string }>,
   model: string,
-  attempt: number = 1
+  attempt: number = 1,
+  jsonMode: boolean = true
 ): Promise<string> {
   const maxAttempts = 3;
   const delayMs = Math.pow(2, attempt) * 400 + Math.random() * 200;
 
   try {
+    const payload: Record<string, any> = {
+      model: model,
+      messages: messages,
+      temperature: 0.1,
+    };
+    if (jsonMode) {
+      payload.response_format = { type: 'json_object' };
+    }
+
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: 0.1,
-        response_format: { type: 'json_object' },
-      }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(12000),
     });
 
@@ -180,12 +185,12 @@ async function callGroqWithBackoff(
     }
 
     const data = await res.json();
-    return data.choices[0]?.message?.content || '{}';
+    return data.choices[0]?.message?.content || (jsonMode ? '{}' : '');
   } catch (err: any) {
     console.warn(`Groq call attempt ${attempt} failed for model ${model}:`, err.message);
     if (attempt < maxAttempts) {
       await new Promise(r => setTimeout(r, delayMs));
-      return callGroqWithBackoff(messages, model, attempt + 1);
+      return callGroqWithBackoff(messages, model, attempt + 1, jsonMode);
     }
     throw err;
   }
@@ -623,4 +628,180 @@ Evaluate this change and return the structured JSON object.`;
 
   addDiagnosticLog('GROQ_EVAL', params.service, `Evaluated change via deterministic simulator (${simulatorModel}, Memory: ON)`, latency_ms, true);
   return { output, latency_ms, model_used: simulatorModel };
+}
+
+export interface PairProgrammerChatParams {
+  run: EvaluationRun;
+  message: string;
+}
+
+const SYSTEM_PROMPT_PAIR_PROGRAMMER = `You are ReVise AI Pair Programmer, an expert engineering assistant paired with a developer on a specific Pull Request evaluated by ReVise.
+
+CORE GROUNDING RULES:
+1. THE SUPPLIED PR ANALYSIS IS YOUR ABSOLUTE SOURCE OF TRUTH.
+2. Only discuss findings, risks, and changed files that are actually present in the supplied PR context.
+3. Hindsight memories are contextual evidence. If memories are present in the analysis, use them to explain the rationale or precedent. If no relevant memories matched, explicitly state that no historical memories applied to this change.
+4. DO NOT INVENT or hallucinate incidents, database locks, Stripe errors, migration issues, or security breaches unless they are present in the supplied PR context or relevant memories.
+5. If the user asks "Why is this an issue?", explain using the actual findings from this PR analysis.
+6. If the user asks "How should I fix this?", provide concrete, step-by-step remediation instructions based on the actual changed files, actual findings, relevant Hindsight memories, and the safer rollout plan.
+7. If the user asks "Why did ReVise recommend this?", explain the reasoning directly from the analysis's recommendation and why_recommendation fields.
+8. If the user's question asks about something not in the PR or diff, politely explain that the current PR analysis does not contain that information, and keep your focus on the actual changeset.
+9. Format all code snippets, terminal commands, and explanations using clean GitHub Flavored Markdown.`;
+
+export async function pairProgrammerChat(params: PairProgrammerChatParams): Promise<{
+  message: string;
+  latency_ms: number;
+  model_used: string;
+}> {
+  const startTime = Date.now();
+  const { run, message } = params;
+  const output = run.output;
+
+  const findingsText = output.findings && output.findings.length > 0
+    ? output.findings.map((f, i) => `Finding #${i + 1} [${f.severity}]: ${f.title}\nDescription: ${f.description}`).join('\n\n')
+    : 'No blocking findings identified for this change.';
+
+  const rolloutText = output.safer_rollout && output.safer_rollout.length > 0
+    ? output.safer_rollout.map((s, i) => `${i + 1}. ${s}`).join('\n')
+    : 'Standard review and verification.';
+
+  const memoriesText = output.memory_citations && output.memory_citations.length > 0
+    ? output.memory_citations.map((m, i) => `Memory #${i + 1} (${m.type}, ${m.date}): ${m.title}\nRelevance: ${m.relevance_note}`).join('\n\n')
+    : 'No relevant Hindsight memories matched this change.';
+
+  const changedFilesText = run.changed_files && run.changed_files.length > 0
+    ? run.changed_files.map(f => `- ${f.filename} (+${f.additions}/-${f.deletions})`).join('\n')
+    : `- ${run.file_name || 'changeset.diff'}`;
+
+  const diffExcerpt = (run.code_snippet || '').slice(0, 6000);
+
+  const contextPrompt = `CURRENT PR ANALYSIS CONTEXT:
+PR / Change: ${run.title}
+Service: ${run.service}
+Risk Assessment: ${output.risk_score}/100 (${output.risk_level} Risk)
+Summary: ${output.summary}
+Focus Areas: ${(run.focus_areas || []).join(', ') || 'General Review'}
+
+CHANGED FILES:
+${changedFilesText}
+
+ANALYZED CODE / DIFF:
+\`\`\`${(run.language || 'text').toLowerCase()}
+${diffExcerpt}
+\`\`\`
+
+FINDINGS:
+${findingsText}
+
+SAFER ROLLOUT RECOMMENDATION:
+${rolloutText}
+
+WHY RECOMMENDATION:
+${output.why_recommendation || 'Standard best-practice review.'}
+
+RELEVANT HINDSIGHT MEMORIES:
+${memoriesText}
+
+DEVELOPER QUESTION:
+${message}`;
+
+  const messages = [
+    { role: 'system', content: SYSTEM_PROMPT_PAIR_PROGRAMMER },
+    { role: 'user', content: contextPrompt },
+  ];
+
+  // 1. If Groq API Key is configured, attempt live Groq chat completion
+  if (GROQ_API_KEY && GROQ_API_KEY.startsWith('gsk_')) {
+    const candidateModels = Array.from(
+      new Set([GROQ_PRIMARY_MODEL, ...GROQ_FALLBACK_MODELS].filter(m => !DECOMMISSIONED_MODELS.has(m)))
+    );
+    for (const candidate of candidateModels) {
+      try {
+        const rawContent = await callGroqWithBackoff(messages, candidate, 1, false);
+        if (rawContent && rawContent.trim()) {
+          const latency_ms = Date.now() - startTime;
+          addDiagnosticLog('AIDER_RUN', run.service, `Pair Programmer chat responded via ${candidate}`, latency_ms, true);
+          return {
+            message: rawContent.trim(),
+            latency_ms,
+            model_used: candidate,
+          };
+        }
+      } catch (e: any) {
+        console.warn(`Pair programmer model ${candidate} failed on Groq, trying next candidate:`, e.message);
+      }
+    }
+  }
+
+  // 2. High-fidelity Grounded Deterministic Simulator fallback
+  const latency_ms = Date.now() - startTime + 120;
+  const simulatorModel = 'simulator/pair-programmer';
+  const qLower = message.toLowerCase();
+
+  let response = '';
+
+  const isWhyIssue = qLower.includes('why is this an issue') || qLower.includes('why is this a problem') || qLower.includes('what is the issue') || qLower.includes('what is the problem') || qLower.includes('explain the finding') || qLower.includes('explain the issue') || qLower.includes('why issue');
+  const isHowFix = qLower.includes('how should i fix') || qLower.includes('how to fix') || qLower.includes('how do i fix') || qLower.includes('fix this') || qLower.includes('solution') || qLower.includes('remediation') || qLower.includes('refactor');
+  const isWhyRecommend = qLower.includes('why did revise recommend') || qLower.includes('why recommend') || qLower.includes('why the recommendation') || qLower.includes('why this rollout');
+  const isMemoryQuery = qLower.includes('memory') || qLower.includes('memories') || qLower.includes('hindsight') || qLower.includes('history') || qLower.includes('past incident');
+  const isRiskQuery = qLower.includes('risk') || qLower.includes('score') || qLower.includes('level');
+
+  if (isWhyIssue) {
+    if (output.findings && output.findings.length > 0) {
+      response = `### 🔍 Analysis of Findings for ${run.title}:\n\n` +
+        output.findings.map(f => `**[${f.severity}] ${f.title}**\n${f.description}`).join('\n\n');
+      if (output.memory_citations && output.memory_citations.length > 0) {
+        response += `\n\n### 🧠 Supporting Memory Context:\n` +
+          output.memory_citations.map(m => `- **${m.title}** (${m.type}, ${m.date}): ${m.relevance_note}`).join('\n');
+      }
+    } else {
+      response = `There are no critical issues or blocking findings identified for this PR. The risk score is ${output.risk_score}/100 (${output.risk_level} Risk). ${output.summary}`;
+    }
+  } else if (isHowFix) {
+    if (output.safer_rollout && output.safer_rollout.length > 0) {
+      response = `### 🛠️ Recommended Remediation Steps:\n\n` +
+        `To safely implement the changes in **${run.file_name || 'the repository'}**:\n\n` +
+        output.safer_rollout.map((step, i) => `${i + 1}. ${step}`).join('\n');
+      if (output.findings && output.findings.length > 0) {
+        response += `\n\n**Key Finding to Address:**\n` +
+          output.findings.map(f => `- **${f.title}**: ${f.description}`).join('\n');
+      }
+    } else {
+      response = `### 🛠️ Recommended Steps:\n\n1. Review the changes in \`${run.file_name || 'PR'}\` locally.\n2. Run the automated test suite.\n3. Verify repository standards before merging.`;
+    }
+  } else if (isWhyRecommend) {
+    response = `### 💡 Recommendation Rationale:\n\n${output.why_recommendation || output.summary}\n\n`;
+    if (output.memory_citations && output.memory_citations.length > 0) {
+      response += `**Relevant Historical Precedent:**\n` +
+        output.memory_citations.map(m => `- **${m.title}** (${m.type}, ${m.date}): ${m.relevance_note}`).join('\n');
+    }
+  } else if (isMemoryQuery) {
+    if (output.memory_citations && output.memory_citations.length > 0) {
+      response = `### 🧠 Relevant Hindsight Memories (${output.memory_citations.length}):\n\n` +
+        output.memory_citations.map(m => `**${m.title}**\n- *Type:* ${m.type} · *Date:* ${m.date} · *Service:* ${m.service}\n- *Relevance:* ${m.relevance_note}`).join('\n\n');
+    } else {
+      response = `No relevant Hindsight memories matched this change. The analysis was conducted against static syntax and repository best practices without matching historical incident patterns.`;
+    }
+  } else if (isRiskQuery) {
+    response = `### 🛡️ Risk Assessment: ${output.risk_score}/100 (${output.risk_level} Risk)\n\n${output.summary}\n\n**Provenance:** ${output.provenance_note || 'ReVise automated analysis'}`;
+  } else {
+    // Grounded general reply
+    response = `### 📋 PR Context: ${run.title}\n\n` +
+      `**Service:** \`${run.service}\` | **Risk:** ${output.risk_score}/100 (${output.risk_level}) | **Findings:** ${output.findings?.length || 0}\n\n` +
+      `**Summary:** ${output.summary}\n\n` +
+      (output.findings && output.findings.length > 0
+        ? `**Top Finding:** ${output.findings[0].title}\n\n`
+        : '') +
+      `You can ask me:\n` +
+      `- *"Why is this an issue?"* to inspect specific findings\n` +
+      `- *"How should I fix this?"* for the step-by-step remediation plan\n` +
+      `- *"Why did ReVise recommend this?"* to see the engineering rationale`;
+  }
+
+  addDiagnosticLog('AIDER_RUN', run.service, `Pair Programmer responded via simulator (${simulatorModel})`, latency_ms, true);
+  return {
+    message: response,
+    latency_ms,
+    model_used: simulatorModel,
+  };
 }

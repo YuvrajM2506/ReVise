@@ -38,3 +38,30 @@ export interface Review {
 export interface Memory { id: string; title: string; content: string; category: "Coding Standard" | "Architecture Decision" | "Review Preference" | "Security Rule" | "Performance Rule" | "Team Convention" | "Historical Outcome"; source: string; confidence: number; date: string; repository: string; usageCount: number; reinforcements: string[] }
 export interface EngineeringStandard { id: string; title: string; description: string; category: "Engineering" | "Security" | "Performance" | "Architecture" | "Team Preferences"; source: string; confidence: number; lastReinforced: string; usageCount: number }
 export interface TimelineEvent { id: string; type: "PR Reviewed" | "Memory Learned" | "Memory Reinforced" | "CI Failed" | "Review Accepted" | "PR Merged" | "Developer Taught ReVise"; time: string; title: string; detail: string; source?: string; confidence?: number }
+export interface PairProgrammerContext {
+  run_id: string;
+  owner?: string;
+  repo?: string;
+  pull_number?: number;
+  service: string;
+  title: string;
+  risk_score: number;
+  risk_level: "Low" | "Medium" | "High";
+  summary: string;
+  findings: Array<{ id: string; severity: string; title: string; description: string; impact?: string; source_memory_ids?: string[] }>;
+  changed_files: Array<{ filename: string; additions: number; deletions: number; status?: string }>;
+  files_changed: number;
+  lines_changed: number;
+  relevant_memories: Array<{ memory_id: string; title: string; type: string; date: string; relevance_note: string; relevance_score?: number; service: string }>;
+  retrieved_memories_count: number;
+  relevant_memories_count: number;
+  excluded_memories_count: number;
+  safer_rollout: string[];
+  why_recommendation: string;
+  focus_areas: string[];
+  code_snippet: string;
+  file_name: string;
+  language: string;
+  created_at: string;
+  memory_enabled: boolean;
+}
