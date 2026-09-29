@@ -19,6 +19,12 @@ export interface RetainMemoryParams {
     resolved_by?: string[];
     prevented_by?: string[];
   };
+  /**
+   * Mirror this memory into Hindsight Cloud only, without inserting another copy
+   * into the local bank. Used by /api/seed, which has already written the seed
+   * memories locally and would otherwise duplicate the first few of them.
+   */
+  sync_only?: boolean;
 }
 
 export interface RecallFilters {
@@ -163,9 +169,12 @@ export async function retainMemory(params: RetainMemoryParams): Promise<{
     }
   }
 
-  // 2. Persist in local memory bank cache
-  store.memories.unshift(newMemory);
-  saveStore(store);
+  // 2. Persist in local memory bank cache (skipped for sync-only callers, whose
+  //    memories are already present locally)
+  if (!params.sync_only) {
+    store.memories.unshift(newMemory);
+    saveStore(store);
+  }
 
   const latency_ms = Date.now() - startTime;
   addDiagnosticLog(

@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import { resetToSeedData } from '@/lib/storage';
+import { getStore, resetToSeedData } from '@/lib/storage';
 import { SEED_MEMORIES } from '@/lib/seed-data';
 import { retainMemory } from '@/lib/hindsight';
 
 export async function POST() {
   try {
     // 1. Reset local cache and store to pristine Acme Platform baseline
-    const store = resetToSeedData();
+    resetToSeedData();
 
-    // 2. If Hindsight Cloud API key is provided, sync memories into Hindsight
+    // 2. If Hindsight Cloud API key is provided, mirror the baseline memories into
+    //    Hindsight. `sync_only` keeps this from inserting duplicate local copies.
     if (process.env.HINDSIGHT_API_KEY && process.env.HINDSIGHT_API_KEY.startsWith('hsk_')) {
       for (const mem of SEED_MEMORIES.slice(0, 5)) {
         try {
@@ -19,6 +20,7 @@ export async function POST() {
             content: mem.content,
             relevance_note: mem.relevance_note,
             metadata: mem.metadata,
+            sync_only: true,
           });
         } catch (e) {
           // ignore single item fail during mass seed
@@ -26,11 +28,14 @@ export async function POST() {
       }
     }
 
+    // Re-read after the Hindsight sync so the counts reflect the final state.
+    const seeded = getStore();
+
     return NextResponse.json({
       success: true,
       message: 'Successfully seeded Acme Platform memory bank and baseline runs',
-      memories_count: store.memories.length,
-      runs_count: store.runs.length,
+      memories_count: seeded.memories.length,
+      runs_count: seeded.runs.length,
     });
   } catch (error: any) {
     console.error('API /api/seed error:', error);
