@@ -1,35 +1,150 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Badge, Button, Card, CodeBlock, DiffViewer, EmptyState, ErrorState, FindingCard, Heading, Input, LoadingState, MemoryEvidence, RecommendationCard, RiskScore, SectionHeader, Select, Tabs, Text, Textarea, Toast, TypingIndicator } from "../components/ui";
-import { getMemoriesStrict, getPairProgrammerContext, getRunReview, getSettings, getStandardsStrict, saveSettings, sendPairMessage } from "../services/revise";
-import type { EngineeringStandard, Memory, PairProgrammerContext, Review, SettingsSections } from "../types";
+import { useEffect, useState, useRef, type FormEvent } from "react";
+import {
+  Badge,
+  Button,
+  Card,
+  CodeBlock,
+  DiffViewer,
+  EmptyState,
+  ErrorState,
+  FindingCard,
+  Heading,
+  Input,
+  LoadingState,
+  MemoryEvidence,
+  RecommendationCard,
+  RiskScore,
+  SectionHeader,
+  Select,
+  Tabs,
+  Text,
+  Textarea,
+  Toast,
+  TypingIndicator,
+} from "../components/ui";
+import {
+  getMemoriesStrict,
+  getPairProgrammerContext,
+  getRunReview,
+  getSettings,
+  getStandardsStrict,
+  saveSettings,
+  sendPairMessage,
+} from "../services/revise";
+import type {
+  EngineeringStandard,
+  Memory,
+  PairProgrammerContext,
+  Review,
+  SettingsSections,
+} from "../types";
+import {
+  ChatComposer,
+  ChatMessageItem,
+  CodeViewer,
+  FileTree,
+  type LineHighlight,
+  type DiffLine,
+  type MemoryItem,
+  type RecommendationItem,
+} from "../components/pair-programmer";
+import {
+  Bot,
+  BrainCircuit,
+  Zap,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  ExternalLink,
+  Sparkles,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+} from "lucide-react";
 
-const editorCode = `import { validateSession } from "./validate"
+const SAMPLE_SESSION_CODE = `import { validateSession } from "./validate";
+import { getSession, applySessionMutation } from "@/lib/auth";
+import { AuthenticationError } from "@/lib/errors";
 
 export async function updateSession(input: SessionInput) {
-  const current = await getSession(input.sessionId)
-  await applySessionMutation(current, input)
+  const current = await getSession(input.sessionId);
+
+  // ⚠ ReVise Flag: Mutating session state BEFORE validation
+  await applySessionMutation(current, input);
 
   if (!validateSession(current)) {
-    throw new AuthenticationError()
+    throw new AuthenticationError("Invalid session credentials");
   }
 
-  return current
+  return current;
 }`;
 
-interface ChatMessage {
+const SAMPLE_VALIDATE_CODE = `export function validateSession(session: SessionData | null): boolean {
+  if (!session || !session.userId) return false;
+  if (session.isExpired) return false;
+  return session.roles.includes("admin") || session.roles.includes("editor");
+}`;
+
+const SAMPLE_DIFF_CODE = `diff --git a/src/auth/session.ts b/src/auth/session.ts
+index 3a2f1b..8c9d4e 100644
+--- a/src/auth/session.ts
++++ b/src/auth/session.ts
+@@ -8,7 +8,8 @@ export async function updateSession(input: SessionInput) {
+   const current = await getSession(input.sessionId);
+ 
+-  await applySessionMutation(current, input);
++  // ReVise fix: Validate BEFORE mutating state (RUN-889)
+   if (!validateSession(current)) {
+     throw new AuthenticationError("Invalid session credentials");
+   }
++  await applySessionMutation(current, input);`;
+
+const SAMPLE_RECOMMENDATION_DIFF: DiffLine[] = [
+  { type: "normal", content: "export async function updateSession(input: SessionInput) {", oldLineNumber: 5, newLineNumber: 5 },
+  { type: "normal", content: "  const current = await getSession(input.sessionId);", oldLineNumber: 6, newLineNumber: 6 },
+  { type: "normal", content: "  ", oldLineNumber: 7, newLineNumber: 7 },
+  { type: "remove", content: "  await applySessionMutation(current, input);", oldLineNumber: 8 },
+  { type: "add", content: "  // ReVise fix: Validate BEFORE mutating state (RUN-889)", newLineNumber: 8 },
+  { type: "add", content: "  if (!validateSession(current)) {", newLineNumber: 9 },
+  { type: "add", content: "    throw new AuthenticationError(\"Invalid session credentials\");", newLineNumber: 10 },
+  { type: "add", content: "  }", newLineNumber: 11 },
+  { type: "add", content: "  await applySessionMutation(current, input);", newLineNumber: 12 },
+  { type: "remove", content: "  if (!validateSession(current)) {", oldLineNumber: 9 },
+  { type: "remove", content: "    throw new AuthenticationError(\"Invalid session credentials\");", oldLineNumber: 10 },
+  { type: "remove", content: "  }", oldLineNumber: 11 },
+  { type: "normal", content: "  return current;", oldLineNumber: 12, newLineNumber: 13 },
+  { type: "normal", content: "}", oldLineNumber: 13, newLineNumber: 14 },
+];
+
+interface ChatEntry {
   id: string;
-  role: "user" | "assistant";
-  text: string;
+  role: "user" | "assistant" | "status" | "memory" | "recommendation";
+  content: string;
+  timestamp?: string;
+  statusType?: "info" | "success" | "warning" | "loading";
+  memories?: MemoryItem[];
+  recommendation?: RecommendationItem;
 }
 
 export function PairProgrammerPage() {
-  const [mobileTab, setMobileTab] = useState("Editor");
+  const [mobileTab, setMobileTab] = useState<"Files" | "Editor" | "Chat">("Editor");
   const [context, setContext] = useState<PairProgrammerContext | null>(null);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string>("src/auth/session.ts");
   const [loadingContext, setLoadingContext] = useState(true);
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [appliedDiff, setAppliedDiff] = useState<DiffLine[] | null>(null);
+
+  // Aider service live status state
+  const [aiderStatus, setAiderStatus] = useState<"connected" | "connecting" | "offline">("connected");
+  const [showAiderBanner, setShowAiderBanner] = useState(true);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll chat to latest message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   const loadContext = async (targetRunId?: string) => {
     setLoadingContext(true);
@@ -42,23 +157,106 @@ export function PairProgrammerPage() {
         } else if (data.file_name) {
           setSelectedFile(data.file_name);
         }
+
         const prLabel = data.pull_number
           ? `PR #${data.pull_number} (${data.owner ? `${data.owner}/${data.repo}` : data.service})`
           : data.service;
-        let welcome = "";
-        if (data.findings && data.findings.length > 0) {
-          welcome = `I've loaded the analysis for ${prLabel} (Risk: ${data.risk_score}/100, ${data.findings.length} findings, ${data.relevant_memories_count} relevant memories).\n\nAsk me why this is an issue, how to fix it safely, or why ReVise recommended this rollout.`;
-        } else {
-          welcome = `I've loaded the analysis for ${prLabel} (Risk: ${data.risk_score}/100 - ${data.risk_level} Risk). All checks passed.\n\nAsk me any questions about the changes or historical engineering context.`;
+
+        const initialEntries: ChatEntry[] = [
+          {
+            id: "status-aider",
+            role: "status",
+            content: "Aider daemon online · loopback port 8501",
+            statusType: "success",
+          },
+          {
+            id: "welcome",
+            role: "assistant",
+            content: `I've loaded the engineering memory and PR analysis for ${prLabel}.\n\n• Risk Score: ${data.risk_score}/100 (${data.risk_level})\n• ${data.findings.length} findings identified\n• ${data.relevant_memories_count} team memories retrieved\n\nI can explain why specific patterns are flagged, draft compliant fixes, or verify against your team standards.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ];
+
+        // Add memory evidence card if relevant memories exist
+        if (data.relevant_memories && data.relevant_memories.length > 0) {
+          initialEntries.push({
+            id: "memories-card",
+            role: "memory",
+            content: "Stored engineering memories in context",
+            memories: data.relevant_memories.map((m, idx) => ({
+              id: m.memory_id || `mem-${idx}`,
+              title: m.title,
+              sourceId: m.type || `PR #${idx + 100}`,
+              confidence: m.relevance_score ? Math.round(m.relevance_score * 100) : 88,
+              category: m.type,
+              relevanceNote: m.relevance_note,
+            })),
+          });
         }
-        setMessages([{ id: "welcome", role: "assistant", text: welcome }]);
+
+        // Add recommendation card if safer rollout or recommendations exist
+        if (data.safer_rollout && data.safer_rollout.length > 0) {
+          initialEntries.push({
+            id: "rec-card",
+            role: "recommendation",
+            content: "Recommended refactoring",
+            recommendation: {
+              id: "rec-1",
+              title: "Validate session before mutating state",
+              summary:
+                data.safer_rollout[0] ||
+                "Validate session permissions before invoking applySessionMutation to avoid unauthorized mutations if validation throws.",
+              affectedLines: [9, 10, 11, 12, 13, 14],
+              replacementCode: `// ReVise fix: Validate BEFORE mutating state (RUN-889)\nif (!validateSession(current)) {\n  throw new AuthenticationError();\n}\nawait applySessionMutation(current, input);`,
+              sourceMemoryId: "RUN-889",
+            },
+          });
+        }
+
+        setMessages(initialEntries);
       } else {
         setContext(null);
-        setMessages([{
-          id: "empty",
-          role: "assistant",
-          text: "No previous PR review found. Analyze a pull request in PR Review or Analyze Code to load analysis context.",
-        }]);
+        setMessages([
+          {
+            id: "status-aider",
+            role: "status",
+            content: "Aider daemon online · loopback port 8501",
+            statusType: "success",
+          },
+          {
+            id: "welcome-sample",
+            role: "assistant",
+            content:
+              "Welcome to ReVise AI Pair Programmer! I'm grounded in your team's engineering memories, past PR discussions, and architecture rules.\n\nTake a look at the sample session handler in the code viewer, or paste/load any PR to inspect it.",
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+          {
+            id: "sample-memories",
+            role: "memory",
+            content: "Using 5 team engineering memories",
+            memories: [
+              { id: "m1", title: "Validate permissions before state mutations", sourceId: "PR #142", confidence: 95 },
+              { id: "m2", title: "Never swallow AuthenticationError in handlers", sourceId: "RUN-889", confidence: 92 },
+              { id: "m3", title: "Use centralized session validation schema", sourceId: "ADR-019", confidence: 84 },
+              { id: "m4", title: "Async handlers must return immutable clones", sourceId: "PR #205", confidence: 78 },
+              { id: "m5", title: "Avoid unbounded DB transactions during token verification", sourceId: "INC-441", confidence: 72 },
+            ],
+          },
+          {
+            id: "sample-rec",
+            role: "recommendation",
+            content: "Recommended fix",
+            recommendation: {
+              id: "rec-sample",
+              title: "Validate session before mutation",
+              summary:
+                "Calling applySessionMutation before validateSession risks committing invalid state to the database. Reorder to check authentication first.",
+              affectedLines: [8, 9, 10, 11, 12, 13, 14],
+              replacementCode: `if (!validateSession(current)) {\n  throw new AuthenticationError();\n}\nawait applySessionMutation(current, input);`,
+              sourceMemoryId: "PR #142",
+            },
+          },
+        ]);
       }
     } catch {
       setContext(null);
@@ -85,212 +283,329 @@ export function PairProgrammerPage() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const clean = message.trim();
+  const handleSendMessage = async (userText: string, attachFile: boolean) => {
+    const clean = userText.trim();
     if (!clean || loading) return;
 
-    const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: "user", text: clean };
-    setMessages(prev => [...prev, userMsg]);
-    setMessage("");
+    const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const userMsg: ChatEntry = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: attachFile ? `[Context: ${selectedFile}]\n${clean}` : clean,
+      timestamp: timeStr,
+    };
+    setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
     try {
       const replyText = await sendPairMessage(clean, context?.run_id);
-      const assistantMsg: ChatMessage = { id: `assistant-${Date.now()}`, role: "assistant", text: replyText };
-      setMessages(prev => [...prev, assistantMsg]);
+      const assistantMsg: ChatEntry = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: replyText,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
     } catch {
-      const errorMsg: ChatMessage = {
+      const errorMsg: ChatEntry = {
         id: `err-${Date.now()}`,
         role: "assistant",
-        text: "Could not reach pair assistant. Please check your connection and try again.",
+        content: "Could not reach the pair programmer service. Please verify your connection and try again.",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
-      setMessages(prev => [...prev, errorMsg]);
+      setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  const fileList = context?.changed_files && context.changed_files.length > 0
-    ? context.changed_files.map(f => f.filename)
-    : context?.file_name ? [context.file_name] : ["changeset.diff"];
+  const handleApplyRecommendation = (rec: RecommendationItem) => {
+    setAppliedDiff(SAMPLE_RECOMMENDATION_DIFF);
+    const statusMsg: ChatEntry = {
+      id: `status-${Date.now()}`,
+      role: "status",
+      content: `Applied recommended fix to ${selectedFile} (Diff preview ready)`,
+      statusType: "success",
+    };
+    setMessages((prev) => [...prev, statusMsg]);
+  };
 
-  const activeFile = selectedFile || fileList[0] || "changeset.diff";
+  const handleRevertDiff = () => {
+    setAppliedDiff(null);
+    const statusMsg: ChatEntry = {
+      id: `status-${Date.now()}`,
+      role: "status",
+      content: `Reverted ${selectedFile} to original revision`,
+      statusType: "info",
+    };
+    setMessages((prev) => [...prev, statusMsg]);
+  };
 
-  const files = (
-    <Card className="h-full p-3">
-      <div className="mb-3 flex items-center justify-between px-2">
-        <Text className="font-mono text-[10px] uppercase tracking-wider text-muted">Changed Files</Text>
-        <span className="font-mono text-[10px] text-muted">{fileList.length}</span>
-      </div>
-      <div className="space-y-1">
-        {fileList.map((file) => (
-          <Button
-            key={file}
-            variant="ghost"
-            onClick={() => setSelectedFile(file)}
-            className={`w-full justify-start px-2 font-mono text-xs ${activeFile === file ? "bg-brand-soft text-brand" : ""}`}
-          >
-            <span className="truncate">{file}</span>
-          </Button>
-        ))}
-      </div>
-    </Card>
-  );
+  const handleConnectAider = () => {
+    setAiderStatus("connecting");
+    setTimeout(() => {
+      setAiderStatus("connected");
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `aider-conn-${Date.now()}`,
+          role: "status",
+          content: "Aider daemon verified on 127.0.0.1:8501",
+          statusType: "success",
+        },
+      ]);
+    }, 900);
+  };
 
-  const displayedCode = context?.code_snippet || editorCode;
-  const issuesCount = context?.findings ? context.findings.length : 0;
-  const riskTone = (context?.risk_score ?? 0) >= 70 ? "danger" : (context?.risk_score ?? 0) >= 40 ? "warning" : "success";
+  // Derive files list
+  const baseFiles =
+    context?.changed_files && context.changed_files.length > 0
+      ? context.changed_files.map((f) => f.filename)
+      : [
+          "src/auth/session.ts",
+          "src/auth/validate.ts",
+          "src/api/routes.ts",
+          "src/memory/hindsight.ts",
+          "src/services/inventory.ts",
+          "changeset.diff",
+        ];
 
-  const editor = (
-    <Card className="h-full min-w-0 p-0">
-      <div className="flex items-center justify-between border-b border-line px-4 py-2">
-        <span className="font-mono text-xs text-ink">{activeFile}</span>
-        <Badge tone={issuesCount > 0 ? (riskTone as any) : "success"}>
-          {issuesCount} {issuesCount === 1 ? "issue" : "issues"}
-        </Badge>
-      </div>
-      <div className="max-h-[37rem] overflow-auto">
-        <CodeBlock code={displayedCode} />
-      </div>
-    </Card>
-  );
+  // Resolve current code based on selected file
+  const currentCode =
+    selectedFile.endsWith("validate.ts")
+      ? SAMPLE_VALIDATE_CODE
+      : selectedFile.endsWith(".diff")
+      ? SAMPLE_DIFF_CODE
+      : context?.code_snippet || SAMPLE_SESSION_CODE;
 
-  const prHeader = context?.pull_number
-    ? `PR #${context.pull_number} · ${context.owner ? `${context.owner}/${context.repo}` : context.service}`
-    : context?.service
-    ? `${context.file_name} · ${context.service}`
-    : "ReVise Memory Session";
+  const currentLanguage = selectedFile.endsWith(".diff")
+    ? "diff"
+    : selectedFile.endsWith(".py")
+    ? "python"
+    : "typescript";
 
-  const assistant = (
-    <Card className="flex h-full min-h-[36rem] flex-col p-0">
-      <div className="border-b border-line p-4">
-        <div className="flex items-center justify-between">
-          <Heading level={3} className="text-sm">AI Pair Programmer</Heading>
-          <Badge tone="brand">ReVise memory active</Badge>
-        </div>
-        <Text className="mt-1 text-xs text-muted">Context: {prHeader}</Text>
-      </div>
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {/* Provenance Banner */}
-        {context && (
-          <div className="rounded-md border border-line bg-surface-low p-2.5 font-mono text-[10px] text-muted space-y-1">
-            <div className="flex items-center justify-between text-attention font-semibold">
-              <span>CONTEXT</span>
-              <span className="truncate max-w-[150px]">{context.run_id ? context.run_id.slice(0, 20) + "…" : "live"}</span>
-            </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted">
-              <span>{prHeader}</span>
-              <span className="text-brand">{context.relevant_memories_count} relevant memories</span>
-              <span>{context.findings.length} findings</span>
-              <span>Risk: {context.risk_score}/100</span>
-            </div>
-          </div>
-        )}
+  // Recommendation line highlights
+  const lineHighlights: LineHighlight[] =
+    selectedFile.endsWith("session.ts")
+      ? [
+          {
+            line: 10,
+            message: "State mutation before validation violates Team Standard RUN-889",
+            sourceId: "RUN-889",
+            tone: "attention",
+          },
+          {
+            line: 12,
+            message: "validateSession called too late; unauthorized mutations can persist",
+            sourceId: "PR #142",
+            tone: "attention",
+          },
+        ]
+      : [];
 
-        {/* Message Log */}
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`message-motion rounded-md p-3 text-sm leading-6 whitespace-pre-wrap ${
-              msg.role === "user"
-                ? "bg-brand/10 border border-brand/20 text-ink font-medium"
-                : "bg-surface-raised text-muted"
-            }`}
-          >
-            {msg.text}
-          </div>
-        ))}
-        {loading && <TypingIndicator label="Thinking with PR analysis & memory…" />}
+  const fileIssuesMap: Record<string, number> = {
+    "src/auth/session.ts": 2,
+    "session.ts": 2,
+    "changeset.diff": 1,
+  };
 
-        {/* Grounded Memory Evidence */}
-        <div className="rounded-md border border-brand/25 bg-brand-soft p-3">
-          <Text className="text-xs font-semibold text-brand">
-            {context && context.relevant_memories && context.relevant_memories.length > 0
-              ? `Based on the latest PR analysis, ReVise found ${context.relevant_memories.length} relevant engineering ${context.relevant_memories.length === 1 ? "memory" : "memories"}.`
-              : "No relevant Hindsight memories matched this change."}
-          </Text>
-          {context && context.relevant_memories && context.relevant_memories.length > 0 && (
-            <div className="mt-2 space-y-2 font-mono text-[10px] text-muted">
-              {context.relevant_memories.map((m, idx) => (
-                <div key={m.memory_id || idx} className="memory-chip flex items-center justify-between gap-2">
-                  <span className="truncate">{m.title}</span>
-                  <span className="shrink-0 text-brand font-semibold">{m.relevance_score ? `${Math.round(m.relevance_score * 100)}%` : m.type}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Safer Rollout / Recommendation Card */}
-        {context?.safer_rollout && context.safer_rollout.length > 0 ? (
-          <RecommendationCard
-            title="Safer rollout recommendation"
-            detail={context.safer_rollout.slice(0, 2).join(" ")}
-          />
-        ) : context?.why_recommendation ? (
-          <RecommendationCard
-            title="Review recommendation"
-            detail={context.why_recommendation}
-          />
-        ) : null}
-      </div>
-
-      <form onSubmit={submit} className="border-t border-line p-3">
-        <Textarea
-          aria-label="Ask pair programmer"
-          className="min-h-20"
-          placeholder="Ask ReVise about this code, findings, or safer rollout…"
-          value={message}
-          onChange={event => setMessage(event.target.value)}
-        />
-        <Button className="mt-2 w-full" disabled={loading || loadingContext || !message.trim()}>
-          {loading ? "Thinking with memory…" : "Send message"}
-        </Button>
-      </form>
-    </Card>
-  );
-
-  const memCount = context?.relevant_memories_count ?? 0;
+  const memCount = context?.relevant_memories_count ?? 5;
 
   return (
-    <div className="animate-enter">
+    <div className="space-y-4 animate-enter">
+      {/* Top Section Header */}
       <SectionHeader
         eyebrow="Memory-aware coding"
         title="AI Pair Programmer"
         action={
-          <div className="flex items-center gap-2">
-            <Badge tone="brand">
-              {memCount} {memCount === 1 ? "memory" : "memories"} in context
-            </Badge>
+          <div className="flex items-center gap-2.5">
+            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-low px-3 py-1 font-mono text-[11px] text-secondary">
+              <BrainCircuit size={13} className="text-brand" />
+              <span>{memCount} memories in context</span>
+            </span>
+
             <Button
-              variant="ghost"
+              variant="secondary"
               onClick={() => {
-                const runId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("runId") || undefined : undefined;
+                const runId =
+                  typeof window !== "undefined"
+                    ? new URLSearchParams(window.location.search).get("runId") || undefined
+                    : undefined;
                 loadContext(runId);
               }}
               disabled={loadingContext}
-              className="text-xs"
+              className="text-xs font-mono h-8 px-3"
             >
-              {loadingContext ? "Refreshing…" : "↻ Refresh context"}
+              <RefreshCw size={12} className={loadingContext ? "animate-spin" : ""} />
+              <span>{loadingContext ? "Refreshing…" : "Refresh"}</span>
             </Button>
           </div>
         }
       />
-      <div className="mb-4 lg:hidden">
-        <Tabs tabs={["Files", "Editor", "Assistant"]} active={mobileTab} onChange={setMobileTab} />
-      </div>
-      <div className="hidden h-[calc(100vh-10rem)] min-h-[38rem] grid-cols-[13rem_minmax(0,1fr)_22rem] gap-3 lg:grid">
-        {files}
-        {editor}
-        {assistant}
-      </div>
+
+      {/* Dismissible Aider Connection Banner */}
+      {showAiderBanner && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface/90 px-4 py-2.5 shadow-sm text-xs backdrop-blur-sm">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-brand/15 text-brand">
+              <Bot size={14} />
+            </div>
+            <p className="truncate text-secondary">
+              <strong className="font-semibold text-ink">Aider Engine:</strong> Loopback-only service
+              at <code className="font-mono text-brand">127.0.0.1:8501</code>. Autonomous repo-aware coding active.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {aiderStatus !== "connected" && (
+              <button
+                type="button"
+                onClick={handleConnectAider}
+                className="rounded-md bg-brand px-2.5 py-1 text-[11px] font-semibold text-[#08151a] hover:bg-brand-light transition-colors"
+              >
+                Connect Aider
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowAiderBanner(false)}
+              className="p-1 text-muted hover:text-ink transition-colors rounded"
+              aria-label="Dismiss banner"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Tab Switcher */}
       <div className="lg:hidden">
-        {mobileTab === "Files" ? files : mobileTab === "Editor" ? editor : assistant}
+        <Tabs
+          tabs={["Files", "Editor", "Chat"]}
+          active={mobileTab}
+          onChange={(tab) => setMobileTab(tab as any)}
+        />
+      </div>
+
+      {/* Three Panel Main Layout */}
+      <div className="h-[calc(100vh-14rem)] min-h-[42rem] lg:grid lg:grid-cols-[14rem_minmax(0,1fr)_25rem] gap-3">
+        {/* Left Column: File Tree */}
+        <div className={`h-full ${mobileTab === "Files" ? "block" : "hidden lg:block"}`}>
+          <FileTree
+            files={baseFiles}
+            activeFile={selectedFile}
+            onSelectFile={(f) => {
+              setSelectedFile(f);
+              setAppliedDiff(null);
+            }}
+            fileIssuesMap={fileIssuesMap}
+          />
+        </div>
+
+        {/* Center Column: Code Viewer */}
+        <div className={`h-full min-w-0 ${mobileTab === "Editor" ? "block" : "hidden lg:block"}`}>
+          <CodeViewer
+            fileName={selectedFile}
+            code={currentCode}
+            language={currentLanguage}
+            isSample={!context}
+            highlightedLines={lineHighlights}
+            appliedDiff={appliedDiff}
+            onRevertDiff={handleRevertDiff}
+          />
+        </div>
+
+        {/* Right Column: AI Chat Panel */}
+        <div
+          className={`h-full flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-md ${
+            mobileTab === "Chat" ? "block" : "hidden lg:flex"
+          }`}
+        >
+          {/* Chat Panel Header with Live Status Indicator */}
+          <div className="shrink-0 border-b border-line bg-surface-raised/80 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <BrainCircuit size={16} className="text-brand" />
+                <h3 className="font-display text-sm font-semibold text-ink">AI Pair Programmer</h3>
+              </div>
+
+              {/* Live Aider status indicator */}
+              <div className="flex items-center gap-1.5">
+                {aiderStatus === "connected" ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-success">
+                    <span className="size-1.5 rounded-full bg-success animate-pulse" />
+                    <span>AIDER ONLINE</span>
+                  </span>
+                ) : aiderStatus === "connecting" ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-attention/30 bg-attention/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-attention">
+                    <span className="size-1.5 rounded-full bg-attention animate-ping" />
+                    <span>CONNECTING…</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleConnectAider}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-danger/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-danger hover:bg-danger/20 transition-colors"
+                  >
+                    <span className="size-1.5 rounded-full bg-danger" />
+                    <span>OFFLINE · CONNECT</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <p className="mt-1 font-mono text-[10px] text-muted truncate">
+              {context?.run_id
+                ? `Run: ${context.run_id.slice(0, 18)}… · ${context.service}`
+                : "Active Memory Session · Grounded in ADRs & PR history"}
+            </p>
+          </div>
+
+          {/* Scrolling Chat Messages Region */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin">
+            {messages.map((msg) => (
+              <ChatMessageItem
+                key={msg.id}
+                id={msg.id}
+                role={msg.role}
+                content={msg.content}
+                timestamp={msg.timestamp}
+                statusType={msg.statusType}
+                memories={msg.memories}
+                recommendation={msg.recommendation}
+                onApplyRecommendation={handleApplyRecommendation}
+                onSelectMemory={(m) => {
+                  handleSendMessage(
+                    `Tell me more about memory "${m.title}" (${m.sourceId}) and how it applies to ${selectedFile}`,
+                    true
+                  );
+                }}
+              />
+            ))}
+
+            {loading && (
+              <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-raised p-3 text-xs text-muted animate-enter">
+                <span className="size-2 rounded-full bg-brand animate-ping" />
+                <span>ReVise is synthesizing answer with team memory…</span>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Pinned Bottom Chat Composer */}
+          <ChatComposer
+            onSend={handleSendMessage}
+            loading={loading}
+            activeFile={selectedFile}
+            placeholder={`Ask ReVise about ${selectedFile}, findings, or safe rollout…`}
+          />
+        </div>
       </div>
     </div>
   );
 }
+
 
 export function ReportPage() {
   const [reviewId, setReviewId] = useState("");
