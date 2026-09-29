@@ -94,6 +94,10 @@ cd aider-service
 uvicorn main:app --port 8001 --reload
 ```
 
+> Uvicorn binds `127.0.0.1` by default, which is what the service expects: it executes
+> subprocesses with host privileges and has no authentication. Do not expose it with
+> `--host 0.0.0.0`.
+
 ### Step D — Seed local demo state
 
 ```bash
@@ -116,7 +120,19 @@ This resets `frontend/data/app_state.json` to the seeded dataset. **Restart the 
 seeding** — the store is cached in module memory for the lifetime of the process, so a running
 server keeps serving the old state.
 
-### Step E — Development server (port 3000)
+### Step E — Run the unit tests (no credentials needed)
+
+```bash
+cd frontend
+npm test
+```
+
+Expect `# tests 27` · `# pass 27` · `# fail 0`. These run on Node's built-in test runner via `tsx`,
+so there is nothing extra to install and no server has to be running. They cover the diff/line
+counters and the pull request reference parser — the two pieces of pure logic that decide how much a
+review claims to have read and whether a pasted PR URL is accepted at all.
+
+### Step F — Development server (port 3000)
 
 ```bash
 cd frontend
@@ -142,8 +158,23 @@ done
 # Live status of the memory + model providers
 curl -s http://127.0.0.1:3000/api/health
 
+# Real memory-bank totals + a live Hindsight connection check (this is what the sidebar shows)
+curl -s http://127.0.0.1:3000/api/pulse
+
 # Seeded runs are readable
 curl -s http://127.0.0.1:3000/api/runs
+
+# A blank snippet is refused rather than scored (expect HTTP 400)
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:3000/api/analyze \
+  -H 'content-type: application/json' -d '{}'
+
+# Settings round-trip: save the General tab, then read it back
+curl -s -X PUT http://127.0.0.1:3000/api/settings -H 'content-type: application/json' \
+  -d '{"tab":"General","values":{"primary":"ReVise Engineering"}}'
+curl -s http://127.0.0.1:3000/api/settings
+
+# A report id that does not exist is reported as such (expect HTTP 404)
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/api/runs/does-not-exist
 
 # Pair-programming service reachability (port 8001)
 curl -s http://127.0.0.1:3000/api/aider/health
@@ -151,8 +182,11 @@ curl -s http://127.0.0.1:3000/api/aider/health
 
 `/api/health` reports the truth about your configuration: `hindsight` shows whether the Hindsight
 bank answered (with latency), and `groq.configured` distinguishes "Live Groq LPU" from
-"Active (Simulator Fallback Ready)". The sidebar counters are static display constants and are not
-evidence of a live connection.
+"Active (Simulator Fallback Ready)".
+
+The sidebar reads `/api/pulse` for its counter and connection pill, so what it shows is the real
+state of the local bank. If it reads *local only*, the Hindsight cloud did not answer and recall is
+being served from the local store — see the troubleshooting table below.
 
 ---
 
@@ -201,6 +235,8 @@ Expect `12 historical memories · 3 evaluation runs · 5 timeline nodes · 5 sta
 | Env vars appear ignored | `.env.local` sits at the repository root | Move it to `frontend/.env.local` |
 | Pair programmer reports *"No LLM API key found in environment"* | Keys are only in `frontend/.env.local`, but the service reads the **root** `.env.local` | Put the key in the root `.env.local` too |
 | `npm run seed` has no visible effect | The server caches the store in memory for its lifetime | Restart the dev server |
+| `400` from `/api/analyze` with *"code_snippet is required"* | The request contained no code. The endpoint refuses to score a change it never read | Send the snippet or diff in `code_snippet` |
+| `502` from `/api/github/analyze` with *"GitHub resource not found"* | The repository is private, or the number does not exist | Use a public pull request; no run is persisted on this path |
 | `500` on `/api/github/analyze`, *"rate limit"* in the message | Anonymous GitHub allows ~60 requests/hour per IP | Wait for the reset time in the error message |
 | `404` for a repository that exists | The repository is private; anonymous access cannot see it | Use a public repository |
 | `Aider backend service is unreachable at http://localhost:8001` | The FastAPI service is not running | Start it (Step C) or fix `AIDER_SERVICE_URL` |

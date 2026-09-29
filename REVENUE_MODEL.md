@@ -2,7 +2,8 @@
 
 > **Status:** draft for the hackathon. Costs and constraints below are grounded in what the
 > product actually does today; price figures are not yet decided and are marked `TBD` rather than
-> invented. The preview page at `/pricing` renders the same tiers with blank amounts.
+> invented. The page at `/pricing` renders the same tiers and states the omission openly instead
+> of drawing empty price cells.
 
 ## Core philosophy
 
@@ -79,7 +80,8 @@ The cost drivers are per-review and per-repository, which is why both appear in 
 
 ## Decisions still open
 
-1. **Free-tier and Pro price points** — blank in this document and in `frontend/src/app/pricing/page.tsx`.
+1. **Free-tier and Pro price points** — `TBD` here and rendered as an explicit "pricing not final"
+   notice in `frontend/src/app/pricing/page.tsx`.
 2. **Metering unit** — per review, per repository, or per memory-query. Reviews and auto-fixes have
    very different unit costs, so a single counter may misprice both.
 3. **Memory retention as the paywall** — retention duration (not review count) is the axis that
