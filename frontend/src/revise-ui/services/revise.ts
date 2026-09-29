@@ -3,8 +3,47 @@ import type { EngineeringStandard, Memory, Review, TimelineEvent } from "../type
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...init });
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+  if (!response.ok) throw new Error(await readErrorMessage(response));
   return response.json() as Promise<T>;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    if (body && typeof body.error === "string" && body.error.trim() !== "") return body.error;
+  } catch {
+    // Non-JSON error body; fall through to the status text.
+  }
+  return `Request failed with status ${response.status}`;
+}
+
+const GITHUB_OWNER_PATTERN = "[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?";
+const GITHUB_REPO_PATTERN = "[A-Za-z0-9._-]+";
+
+const REFERENCE_PATTERNS: RegExp[] = [
+  // https://github.com/owner/repo/pull/123 (scheme optional; tolerates /files, ?query and #fragment suffixes)
+  new RegExp(`^(?:https?://)?(?:www\\.)?github\\.com/(${GITHUB_OWNER_PATTERN})/(${GITHUB_REPO_PATTERN})/pull/(\\d+)(?:[/?#].*)?$`, "i"),
+  // owner/repo PR #123 | owner/repo · PR 123 | owner/repo#123
+  new RegExp(`^(${GITHUB_OWNER_PATTERN})/(${GITHUB_REPO_PATTERN})\\s*(?:[·,-]\\s*)?(?:PR\\s*#?\\s*|#)(\\d+)\\b`, "i"),
+];
+
+export interface GitHubReference {
+  owner: string;
+  repo: string;
+  pullNumber: number;
+}
+
+export function parseGitHubReference(reference: string): GitHubReference {
+  const candidate = (reference || "").trim();
+  for (const pattern of REFERENCE_PATTERNS) {
+    const match = candidate.match(pattern);
+    if (!match) continue;
+    const pullNumber = Number(match[3]);
+    if (Number.isInteger(pullNumber) && pullNumber > 0) {
+      return { owner: match[1], repo: match[2], pullNumber };
+    }
+  }
+  throw new Error("Use a GitHub pull request URL such as https://github.com/owner/repository/pull/12, or owner/repository · PR 12.");
 }
 
 function mapMemoryCitation(m: any) {
@@ -55,12 +94,10 @@ function mapRunToReview(run: any, reference = "ReVise") : Review {
 }
 
 export async function analyzePullRequest(reference: string): Promise<Review> {
-  const match = reference.match(/(?:https?:\/\/github\.com\/)?([^\s/]+)\/([^\s·#]+).*?(?:PR\s*#?\s*|#)(\d+)/i);
-  if (!match) throw new Error("Use a GitHub reference such as owner/repository · PR 12.");
-  const [, owner, repo, pr] = match;
+  const { owner, repo, pullNumber } = parseGitHubReference(reference);
   const result = await request<any>("/api/github/analyze", {
     method: "POST",
-    body: JSON.stringify({ owner, repo, pullNumber: Number(pr), memoryEnabled: true, postToGitHub: false }),
+    body: JSON.stringify({ owner, repo, pullNumber, memoryEnabled: true, postToGitHub: false }),
   });
   if (!result.success) throw new Error(result.error || "GitHub review failed");
   return mapRunToReview(result.run, `${owner}/${repo}`);
