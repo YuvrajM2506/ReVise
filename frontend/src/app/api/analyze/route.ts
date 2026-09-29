@@ -2,23 +2,55 @@ import { NextRequest, NextResponse } from 'next/server';
 import { recallMemories, filterRelevantMemories } from '@/lib/hindsight';
 import { evaluateCodeChange } from '@/lib/groq';
 import { getStore, saveStore } from '@/lib/storage';
+import { countChangeStats } from '@/lib/diff-stats';
 import { EvaluationRun } from '@/lib/types';
+import { readCappedJson } from '@/lib/rate-limit';
+
+/** The review prompt is bounded by the same ceiling GitHub route applies to diffs. */
+const MAX_SNIPPET_CHARS = 25000;
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const guard = await readCappedJson(req, {
+      bucket: 'analyze',
+      limit: 20,
+      windowMs: 60_000,
+      maxBodyBytes: 400_000,
+    });
+    if (!guard.ok) return guard.response;
+    const body = guard.body ?? {};
     const {
       pr_title = 'Code analysis',
       service = 'local-code',
       environment = 'Production',
       policy = 'Strict production policy',
-      focus_areas = ['General Review'],
+focus_areas = ['General Review'],
       code_snippet = '',
       file_name = 'snippet.ts',
       language = 'TypeScript',
       memory_enabled = true,
     } = body;
 
+    // Reading the change is mandatory, exactly as on the GitHub route: scoring an
+    // empty snippet would hand back a confident risk assessment for a review that
+    // never saw any code. Reject it instead of inventing a result.
+    if (typeof code_snippet !== 'string' || code_snippet.trim() === '') {
+      return NextResponse.json(
+        { success: false, error: 'code_snippet is required: send the code or diff to review.' },
+        { status: 400 }
+      );
+    }
+
+    // Oversized paste: refuse rather than silently reviewing a fragment, so the
+    // caller knows the request was not actually evaluated.
+    if (code_snippet.length > MAX_SNIPPET_CHARS) {
+      return NextResponse.json(
+        { success: false, error: `code_snippet is too large (${code_snippet.length} characters). Send at most ${MAX_SNIPPET_CHARS}.` },
+        { status: 413 }
+      );
+    }
+
+    const changeStats = countChangeStats(code_snippet);
     const startTime = Date.now();
 
     // 1. Query Hindsight for top-k memories if memory is enabled
@@ -67,17 +99,20 @@ export async function POST(req: NextRequest) {
       memory_enabled,
     });
 
-    // 3. Persist this evaluation run
+    // 3. Persist this evaluation run. Title and service are clamped because run
+    //    ids and titles end up in report URLs and headers; unbounded client
+    //    strings there would overflow the report layout.
     const totalLatency = Date.now() - startTime;
     const runId = `run-${Date.now().toString(36)}`;
-    
-    let status: EvaluationRun['status'] = 'SAFE';
+
+    // Status vocabulary matches EvaluationRun['status']. "SAFE" was unreachable:
+    // every review that comes back from a completed evaluation is by definition
+    // reviewed, so low risk is reported as RESOLVED.
+    let status: EvaluationRun['status'] = 'RESOLVED';
     if (evalResult.output.risk_score >= 70) {
       status = 'HIGH RISK';
     } else if (evalResult.output.risk_score >= 40) {
       status = 'MEDIUM RISK';
-    } else {
-      status = 'RESOLVED';
     }
 
     const newRun: EvaluationRun = {
@@ -85,8 +120,8 @@ export async function POST(req: NextRequest) {
       created_at: new Date().toISOString(),
       relative_time: 'Just now',
       status,
-      title: pr_title,
-      service,
+      title: String(pr_title || 'Code analysis').slice(0, 140),
+      service: String(service || 'local-code').slice(0, 80),
       environment,
       policy,
       focus_areas,
@@ -94,6 +129,8 @@ export async function POST(req: NextRequest) {
       file_name,
       language,
       memory_enabled,
+      files_changed: changeStats.files_changed,
+      lines_changed: changeStats.lines_changed,
       retrieved_memories_count: retrievedMemories.length,
       retrieved_memory_ids: retrievedMemories.map(m => m.id),
       relevant_memories_count: relevantMemories.length,
@@ -113,10 +150,12 @@ export async function POST(req: NextRequest) {
       success: true,
       run_id: runId,
       run: newRun,
-      retrieved_memories_count: retrievedMemories.length,
+retrieved_memories_count: retrievedMemories.length,
       relevant_memories_count: relevantMemories.length,
       excluded_memories_count: excludedMemories.length,
       excluded_memories: excludedMemories,
+      files_changed: changeStats.files_changed,
+      lines_changed: changeStats.lines_changed,
       retrieval_latency_ms: retrievalLatency,
       total_latency_ms: totalLatency,
     });

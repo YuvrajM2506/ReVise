@@ -1,9 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getStore, resetToSeedData } from '@/lib/storage';
 import { SEED_MEMORIES } from '@/lib/seed-data';
 import { retainMemory } from '@/lib/hindsight';
+import { checkRateLimit, rateLimitedResponse } from '@/lib/rate-limit';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  // Seeding is destructive (it wipes real runs, memories and preferences), so it
+  // must not be repeatable by a stray refresh or an outside loop.
+  const gate = checkRateLimit(req, 'seed', 3, 60_000);
+  if (!gate.allowed) return rateLimitedResponse(gate.retryAfterSeconds);
   try {
     // 1. Reset local cache and store to pristine Acme Platform baseline
     resetToSeedData();

@@ -6,9 +6,9 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import requests
 from dotenv import load_dotenv
 
@@ -27,23 +27,51 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# The service executes git clones and Aider subprocesses on the host, so it is a
+# local development tool and must not accept commands from arbitrary websites.
+# Same-origin browser calls do not need CORS at all; the explicit localhost list
+# keeps a dev-server page from being able to drive it cross-origin.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
 class RunRequest(BaseModel):
     repo_url: str = Field(..., description="Git URL or local file path to the repository")
-    task: str = Field(..., description="The coding task or instructions for Aider")
-    target_files: List[str] = Field(default_factory=list, description="Target files to edit")
+    task: str = Field(..., max_length=4000, description="The coding task or instructions for Aider")
+    target_files: List[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Target files to edit (max 20 entries)"
+    )
     memory_context: Optional[List[str]] = Field(
         default_factory=list,
-        description="Organizational memories retrieved from Hindsight to guide Aider",
+        max_length=10,
+        description="Organizational memories retrieved from Hindsight to guide Aider (max 10 entries)"
     )
+
+    @field_validator("target_files")
+    @classmethod
+    def validate_target_files(cls, value: List[str]) -> List[str]:
+        cleaned = [entry.strip() for entry in value if entry and entry.strip()]
+        if len(cleaned) != len(value):
+            raise ValueError("target_files entries must be non-empty strings without padding whitespace")
+        for entry in cleaned:
+            if len(entry) > 300:
+                raise ValueError("target_files entries must be at most 300 characters")
+        return cleaned
+
+    @field_validator("memory_context")
+    @classmethod
+    def validate_memory_context(cls, value: List[str]) -> List[str]:
+        return [entry[:2000] for entry in value]
 
 
 class RunResponse(BaseModel):
@@ -278,10 +306,18 @@ def health_check():
 
 
 @app.post("/run", response_model=RunResponse)
-def run_aider(req: RunRequest):
+def run_aider(req: RunRequest, request: Request):
     """
     Execute Aider non-interactively on a cloned repository with Hindsight organizational memory context.
     """
+    # Payload size guard ahead of any clone/subprocess work.
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > 64_000:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Request payload is too large.",
+        )
+
     if not req.repo_url or not req.repo_url.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -308,13 +344,24 @@ def run_aider(req: RunRequest):
     # Prepare temp directory
     temp_dir = tempfile.mkdtemp(prefix="revise_aider_")
     try:
-        # Clone repository
+        # Clone repository. Local paths are restricted to the checkout this
+        # service belongs to, so a request cannot clone or commit over arbitrary
+        # host directories.
         repo_url = req.repo_url.strip()
         is_local_path = os.path.exists(repo_url)
 
         try:
             if is_local_path:
                 local_path = Path(repo_url).resolve()
+                allowed_root = current_dir.parent.resolve()
+                if allowed_root not in local_path.parents and local_path != allowed_root:
+                    return RunResponse(
+                        success=False,
+                        diff="",
+                        files_changed=[],
+                        log="",
+                        error=f"Local repository path must be inside {allowed_root}.",
+                    )
                 # Check if it's a git repo or directory
                 git_dir = local_path / ".git"
                 if git_dir.exists():
@@ -502,4 +549,6 @@ def run_aider(req: RunRequest):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("AIDER_SERVICE_PORT", "8001"))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    # Loopback bind: this service executes subprocesses on the host and has no
+    # authentication, so it must not be reachable from other machines by default.
+    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)

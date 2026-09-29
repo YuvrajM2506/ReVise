@@ -142,14 +142,19 @@ export interface EvaluationRun {
   file_name: string;
   language: string;
   memory_enabled: boolean;
+  /**
+   * How much was actually reviewed. Optional because runs persisted before
+   * these counters existed are still readable — readers must tolerate absent
+   * values rather than reporting a fabricated zero.
+   */
+  files_changed?: number;
+  lines_changed?: number;
   retrieved_memories_count: number;
   retrieved_memory_ids: string[];
   relevant_memories_count?: number;
   excluded_memories_count?: number;
   output: StructuredAnalysisOutput;
   execution_latency_ms: number;
-  files_changed?: number;
-  lines_changed?: number;
   changed_files?: Array<{ filename: string; additions: number; deletions: number; status?: string }>;
 }
 
@@ -209,5 +214,8 @@ export interface MemoryPulseData {
   repeated_risks_count: number;
   growth_sparkline: number[];
   hindsight_connected: boolean;
-  last_sync_timestamp: string;
+  /** Timestamp of the most recent real memory activity, or null when none exists. */
+  last_sync_timestamp: string | null;
+  /** Which backend answered, filled in by /api/pulse from a live health check. */
+  hindsight_mode?: 'live_cloud' | 'local_resilient';
 }

@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recallMemories } from '@/lib/hindsight';
 import { addDiagnosticLog } from '@/lib/storage';
+import { readCappedJson } from '@/lib/rate-limit';
 
 const AIDER_SERVICE_URL = process.env.AIDER_SERVICE_URL || 'http://localhost:8001';
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   try {
-    const body = await req.json();
+    const guard = await readCappedJson(req, {
+      bucket: 'aider-run',
+      limit: 5,
+      windowMs: 60_000,
+      maxBodyBytes: 16_000,
+    });
+    if (!guard.ok) return guard.response;
+    const body = guard.body ?? {};
     const {
       repo_url = '',
       task = '',
@@ -31,6 +39,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Clamp free-text fields: task and target files are interpolated straight
+    // into the Aider prompt, so unbounded client strings produce oversized
+    // prompts and unusable logs.
+    const cleanTask = String(task).slice(0, 4000);
+    const cleanTargets = (Array.isArray(target_files) ? target_files : [])
+      .map((f: unknown) => String(f ?? '').trim())
+      .filter((f: string) => f !== '')
+      .slice(0, 20)
+      .map((f: string) => f.slice(0, 300));
+
     // 1. Recall Hindsight memories if memory is enabled
     let memoryContext: string[] = [];
     let retrievedMemories: any[] = [];
@@ -38,9 +56,9 @@ export async function POST(req: NextRequest) {
 
     if (use_memory) {
       const recallResult = await recallMemories(
-        `${task} ${target_files.join(' ')}`,
+        `${task} ${cleanTargets.join(' ')}`,
         {
-          service,
+          service: String(service || 'general').slice(0, 80),
           focus_area,
           top_k: 4,
         }
@@ -62,8 +80,8 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           repo_url,
-          task,
-          target_files,
+          task: cleanTask,
+          target_files: cleanTargets,
           memory_context: memoryContext,
         }),
         signal: AbortSignal.timeout(250000), // 250s timeout matching backend

@@ -3,6 +3,7 @@ import { listPulls, getPullFiles, getPullDiff, GitHubFile } from '@/lib/github';
 import { retainMemory } from '@/lib/hindsight';
 import { getStore } from '@/lib/storage';
 import { FocusArea } from '@/lib/types';
+import { readCappedJson } from '@/lib/rate-limit';
 
 const MAX_DIFF_SUMMARY_CHARS = 1500;
 const MAX_PR_LIMIT = 20;
@@ -51,10 +52,22 @@ function detectFocusAreas(files: GitHubFile[], textSample: string): FocusArea[] 
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    // Backfill spends GitHub's anonymous rate budget (files + diff per PR), so
+    // one accidental double-submit can exhaust an hour of quota.
+    const guard = await readCappedJson(req, {
+      bucket: 'github-backfill',
+      limit: 5,
+      windowMs: 60_000,
+      maxBodyBytes: 4_000,
+    });
+    if (!guard.ok) return guard.response;
+    const body = guard.body ?? {};
     const { owner, repo, bankId, maxPRs } = body;
 
-    // 1. Validate inputs
+    // 1. Validate inputs. The bank is optional: the configured HINDSIGHT_BANK_ID
+    //    (or retainMemory's own default) is the correct target, and requiring a
+    //    client-supplied bank id let any caller write memories into an arbitrary
+    //    cloud bank.
     if (!owner || typeof owner !== 'string' || owner.trim() === '') {
       return NextResponse.json(
         { success: false, error: 'Repository owner is required and must be a non-empty string.' },
@@ -69,9 +82,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!bankId || typeof bankId !== 'string' || bankId.trim() === '') {
+    const configuredBankId = process.env.HINDSIGHT_BANK_ID?.trim();
+    if (!configuredBankId && (!bankId || typeof bankId !== 'string' || bankId.trim() === '')) {
       return NextResponse.json(
-        { success: false, error: 'Memory bank ID is required and must be a non-empty string.' },
+        { success: false, error: 'Memory bank ID is required when HINDSIGHT_BANK_ID is not configured.' },
         { status: 400 }
       );
     }
@@ -89,7 +103,7 @@ export async function POST(req: NextRequest) {
 
     const cleanOwner = owner.trim();
     const cleanRepo = repo.trim();
-    const cleanBankId = bankId.trim();
+    const cleanBankId = (typeof bankId === 'string' && bankId.trim() !== '') ? bankId.trim() : configuredBankId!;
 
     // 2. Fetch recently closed/merged PRs via GitHub API
     const pulls = await listPulls(cleanOwner, cleanRepo, {

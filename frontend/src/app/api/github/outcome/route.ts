@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { retainMemory } from '@/lib/hindsight';
 import { MemoryType } from '@/lib/types';
+import { readCappedJson } from '@/lib/rate-limit';
 
 const ALLOWED_EVENTS = ['pr_merged', 'pr_closed', 'ci_failed'] as const;
 type GitHubOutcomeEvent = (typeof ALLOWED_EVENTS)[number];
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const guard = await readCappedJson(req, {
+      bucket: 'github-outcome',
+      limit: 30,
+      windowMs: 60_000,
+      maxBodyBytes: 16_000,
+    });
+    if (!guard.ok) return guard.response;
+    const body = guard.body ?? {};
     const {
       owner,
       repo,

@@ -3,7 +3,9 @@ import { getPullDiff, getPullFiles, postPullReview, GitHubFile } from '@/lib/git
 import { recallMemories, filterRelevantMemories } from '@/lib/hindsight';
 import { evaluateCodeChange } from '@/lib/groq';
 import { getStore, saveStore, addDiagnosticLog } from '@/lib/storage';
+import { countDiffStats, extractDiffFileNames } from '@/lib/diff-stats';
 import { EvaluationRun, FocusArea } from '@/lib/types';
+import { readCappedJson } from '@/lib/rate-limit';
 
 const MAX_DIFF_CHARS = 25000;
 
@@ -61,22 +63,17 @@ function detectFocusAreas(files: GitHubFile[], diffText: string): FocusArea[] {
   return areas.length > 0 ? areas : ['General Review'];
 }
 
-/**
- * Recover changed file names from a unified diff header. Used when GitHub's
- * file-listing endpoint is unavailable but the diff itself came through.
- */
-function extractDiffFileNames(diffText: string): string[] {
-  const names = new Set<string>();
-  for (const line of diffText.split('\n')) {
-    const match = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
-    if (match) names.add(match[2]);
-  }
-  return Array.from(names);
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    // GitHub reads and Groq tokens are both metered; this endpoint triggers both.
+    const guard = await readCappedJson(req, {
+      bucket: 'github-analyze',
+      limit: 20,
+      windowMs: 60_000,
+      maxBodyBytes: 16_000,
+    });
+    if (!guard.ok) return guard.response;
+    const body = guard.body ?? {};
     const {
       owner,
       repo,
@@ -99,6 +96,11 @@ export async function POST(req: NextRequest) {
 
     const cleanOwner = owner.trim();
     const cleanRepo = repo.trim();
+    // Anonymous GitHub requests interpolate owner/repo into URLs; reject values
+    // with URL syntax before they get there.
+    if (/[/?#\s]/.test(cleanOwner) || /[/?#\s]/.test(cleanRepo)) {
+      return NextResponse.json({ success: false, error: 'Owner and repository must be plain names.' }, { status: 400 });
+    }
     const configuredBankId = process.env.HINDSIGHT_BANK_ID?.trim();
     const targetBankId = (typeof bankId === 'string' && bankId.trim() !== '')
       ? bankId.trim()
@@ -159,8 +161,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Determine file metadata and focus areas
+    // 4. Determine file metadata, size of the change, and focus areas
     const diffFileNames = extractDiffFileNames(diffContent);
+    const diffStats = countDiffStats(diffContent);
+    // Prefer GitHub's file list when it answered; otherwise trust the diff headers.
+    const filesChanged = files.length || diffFileNames.length || diffStats.files_changed;
+    // GitHub's file list carries exact additions/deletions; the diff headers are
+    // the fallback for when that list is unavailable or the diff was truncated.
+    const linesChanged = files.length
+      ? files.reduce((acc, f) => acc + (f.additions || 0) + (f.deletions || 0), 0)
+      : diffStats.lines_changed;
     const primaryFile = files[0]?.filename || diffFileNames[0] || 'changeset.diff';
     const primaryLang = detectLanguage(primaryFile);
     const focusAreas = detectFocusAreas(files, diffContent);
@@ -220,7 +230,6 @@ export async function POST(req: NextRequest) {
     const totalLatency = Date.now() - startTime;
     const runId = `run-gh-${cleanOwner}-${cleanRepo}-${pullNumber}-${Date.now().toString(36)}`;
     const filesCount = files.length;
-    const linesChanged = files.reduce((acc, f) => acc + (f.additions || 0) + (f.deletions || 0), 0);
     const changedFilesList = files.map(f => ({
       filename: f.filename,
       additions: f.additions || 0,
@@ -253,14 +262,14 @@ export async function POST(req: NextRequest) {
       file_name: primaryFile,
       language: primaryLang,
       memory_enabled: memoryEnabled,
+      files_changed: filesChanged,
+      lines_changed: linesChanged,
       retrieved_memories_count: retrievedMemories.length,
       retrieved_memory_ids: retrievedMemories.map(m => m.id),
       relevant_memories_count: relevantMemories.length,
       excluded_memories_count: excludedMemories.length,
       output,
       execution_latency_ms: totalLatency,
-      files_changed: filesCount,
-      lines_changed: linesChanged,
       changed_files: changedFilesList,
     };
 
@@ -314,6 +323,7 @@ ${output.safer_rollout.map(s => `- ${s}`).join('\n')}${citationsText}
       run_id: runId,
       run: newRun,
       review: output,
+diff_truncated: diffTruncated,
       files_analyzed_count: filesCount || files.length || diffFileNames.length,
       lines_changed: linesChanged,
       files: changedFilesList,

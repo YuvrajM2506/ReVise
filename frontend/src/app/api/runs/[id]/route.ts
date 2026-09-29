@@ -6,7 +6,10 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   const store = getStore();
-  const run = store.runs.find(r => r.id === params.id);
+  // Ids are generated server-side (`run-…`); matching exact full strings also
+  // keeps encoded tricks like "run%0Aevil" from ever resolving.
+  const id = String(params.id || '');
+  const run = store.runs.find(r => r.id === id);
 
   if (!run) {
     return NextResponse.json(

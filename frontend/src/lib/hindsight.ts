@@ -172,8 +172,13 @@ export async function retainMemory(params: RetainMemoryParams): Promise<{
   // 2. Persist in local memory bank cache (skipped for sync-only callers, whose
   //    memories are already present locally)
   if (!params.sync_only) {
-    store.memories.unshift(newMemory);
-    saveStore(store);
+    // Re-read the store here instead of reusing the reference captured before the
+    // network call. POST /api/seed can replace the cached store while this request
+    // is awaiting Hindsight; writing the older reference back would silently undo
+    // that reset. Mutating the current store keeps the last write authoritative.
+    const current = getStore();
+    current.memories.unshift(newMemory);
+    saveStore(current);
   }
 
   const latency_ms = Date.now() - startTime;

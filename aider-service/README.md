@@ -137,8 +137,15 @@ curl -s localhost:8001/run -H 'content-type: application/json' -d '{
 
 - **The sandbox is a temp directory, not a container.** Aider runs with the service's own
   filesystem and network privileges; the clone is isolated, the process is not.
-- **CORS is fully open** (`allow_origins=["*"]`) — appropriate for local development, not for
-  exposing this service beyond localhost.
+- **Loopback by default.** `python main.py` binds `127.0.0.1`, not `0.0.0.0`; the service executes
+  subprocesses with the host's privileges and has no authentication, so it must not be reachable
+  from other machines.
+- **CORS is limited to the local dev server** (`http://localhost:3000` and `http://127.0.0.1:3000`).
+  Same-origin server-to-server calls from the Next.js routes do not need CORS at all.
+- **Input limits.** `/run` accepts at most 4,000 characters of task instruction, 20 target files and
+  10 memory-context entries, and rejects request bodies above 64 KB before any clone starts.
+- **Local-path confinement.** A `repo_url` pointing at the host filesystem must resolve inside the
+  repository checkout; arbitrary host paths are refused.
 - **Nothing is persisted here.** Each run clones fresh; the returned diff is handed back to the
   Next.js app, which owns all state.
 - Aider's own config files (`.aider*`) and caches are git-ignored at the repository root.
