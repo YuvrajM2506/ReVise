@@ -1,0 +1,21 @@
+{
+  "name": "@revise/cli",
+  "version": "0.1.0",
+  "description": "ReVise — Engineering-Memory Code Review CLI Agent",
+  "bin": {
+    "revise": "./bin/revise.js"
+  },
+  "scripts": {
+    "start": "tsx src/bin.ts"
+  },
+  "keywords": [
+    "code-review",
+    "ai",
+    "engineering-memory",
+    "hindsight",
+    "groq",
+    "cli"
+  ],
+  "author": "ReVise Team",
+  "license": "MIT"
+}

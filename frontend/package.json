@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "tsx ../scripts/seed.ts",
-    "test": "tsx --test tests/diff-stats.test.ts tests/parse-github-reference.test.ts"
+    "test": "tsx --test tests/diff-stats.test.ts tests/parse-github-reference.test.ts tests/cli.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

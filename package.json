@@ -1,0 +1,24 @@
+{
+  "name": "revise-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ReVise — Engineering-Memory Code Review Agent & CLI",
+  "bin": {
+    "revise": "./bin/revise.js"
+  },
+  "scripts": {
+    "cli": "tsx cli/src/bin.ts",
+    "revise": "tsx cli/src/bin.ts",
+    "seed": "tsx scripts/seed.ts",
+    "test": "npm --prefix frontend test"
+  },
+  "keywords": [
+    "code-review",
+    "ai",
+    "hindsight",
+    "groq",
+    "cli"
+  ],
+  "author": "ReVise Team",
+  "license": "MIT"
+}

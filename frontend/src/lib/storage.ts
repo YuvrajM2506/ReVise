@@ -24,13 +24,28 @@ interface AppStore {
   settings: SettingsSections;
 }
 
-const STORAGE_FILE = path.join(process.cwd(), 'data', 'app_state.json');
+function getStorageFile(): string {
+  if (process.env.REVISE_DATA_PATH) {
+    return process.env.REVISE_DATA_PATH;
+  }
+  const candidates = [
+    path.join(process.cwd(), 'data', 'app_state.json'),
+    path.join(process.cwd(), 'frontend', 'data', 'app_state.json'),
+    path.join(process.cwd(), '..', 'frontend', 'data', 'app_state.json'),
+    path.join(process.cwd(), '..', 'data', 'app_state.json'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
+}
 
 // In-memory cache singleton
 let memoryCache: AppStore | null = null;
 
 function ensureStorageDir() {
-  const dir = path.dirname(STORAGE_FILE);
+  const file = getStorageFile();
+  const dir = path.dirname(file);
   if (!fs.existsSync(dir)) {
     try {
       fs.mkdirSync(dir, { recursive: true });
@@ -96,9 +111,10 @@ export function getStore(): AppStore {
 
   ensureStorageDir();
 
-  if (fs.existsSync(STORAGE_FILE)) {
+  const file = getStorageFile();
+  if (fs.existsSync(file)) {
     try {
-      const data = fs.readFileSync(STORAGE_FILE, 'utf-8');
+      const data = fs.readFileSync(file, 'utf-8');
       memoryCache = normalizeStore(JSON.parse(data));
       return memoryCache;
     } catch (e) {
@@ -106,8 +122,8 @@ export function getStore(): AppStore {
       // instead of silently overwriting it with seed data on the way out.
       console.error('Error reading storage file, initializing with seed data:', e);
       try {
-        const quarantine = `${STORAGE_FILE}.corrupt-${Date.now()}`;
-        fs.renameSync(STORAGE_FILE, quarantine);
+        const quarantine = `${file}.corrupt-${Date.now()}`;
+        fs.renameSync(file, quarantine);
         console.warn(`Preserved unreadable store as ${quarantine}`);
       } catch {
         // Best effort only; seeding below still recovers the application.
@@ -140,7 +156,7 @@ export function getStore(): AppStore {
 }
 
 /**
- * Persist the store atomically. Writing straight to STORAGE_FILE means a crash,
+ * Persist the store atomically. Writing straight to storage file means a crash,
  * full disk or killed process mid-write leaves truncated JSON behind, and the
  * next boot would discard the whole bank; writing to a sibling then renaming
  * means readers only ever see a complete file.
@@ -149,9 +165,10 @@ export function saveStore(store: AppStore) {
   memoryCache = store;
   try {
     ensureStorageDir();
-    const tempFile = `${STORAGE_FILE}.${process.pid}.tmp`;
+    const file = getStorageFile();
+    const tempFile = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tempFile, JSON.stringify(store, null, 2), 'utf-8');
-    fs.renameSync(tempFile, STORAGE_FILE);
+    fs.renameSync(tempFile, file);
   } catch (e) {
     console.warn('Could not persist storage to disk:', e);
   }
