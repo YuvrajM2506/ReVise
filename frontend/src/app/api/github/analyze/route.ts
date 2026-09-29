@@ -56,6 +56,19 @@ function detectFocusAreas(files: GitHubFile[], diffText: string): FocusArea[] {
   return areas.length > 0 ? areas : ['Unsafe DB migration'];
 }
 
+/**
+ * Recover changed file names from a unified diff header. Used when GitHub's
+ * file-listing endpoint is unavailable but the diff itself came through.
+ */
+function extractDiffFileNames(diffText: string): string[] {
+  const names = new Set<string>();
+  for (const line of diffText.split('\n')) {
+    const match = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+    if (match) names.add(match[2]);
+  }
+  return Array.from(names);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -81,20 +94,29 @@ export async function POST(req: NextRequest) {
 
     const cleanOwner = owner.trim();
     const cleanRepo = repo.trim();
-    const targetBankId = (typeof bankId === 'string' && bankId.trim() !== '') ? bankId.trim() : `${cleanOwner}/${cleanRepo}`;
+    const configuredBankId = process.env.HINDSIGHT_BANK_ID?.trim();
+    const targetBankId = (typeof bankId === 'string' && bankId.trim() !== '')
+      ? bankId.trim()
+      : (configuredBankId || `${cleanOwner}/${cleanRepo}`);
     const startTime = Date.now();
+    const warnings: string[] = [];
 
-    // 2. Fetch changed files
+    // 2. Fetch changed files (non-fatal on its own: the diff is what we review)
     let files: GitHubFile[] = [];
+    let filesError: string | null = null;
     try {
       files = await getPullFiles(cleanOwner, cleanRepo, pullNumber);
     } catch (err: any) {
+      filesError = err.message;
+      warnings.push(`Changed file metadata unavailable: ${err.message}`);
       console.warn(`Failed to fetch files for PR #${pullNumber}:`, err.message);
     }
 
-    // 3. Fetch PR diff with graceful large-diff fallback
+    // 3. Fetch the PR diff. Reading the change is mandatory: a review of an
+    //    unread diff would invent findings, so failure here aborts the request.
     let diffContent = '';
     let diffTruncated = false;
+    let diffError: string | null = null;
 
     try {
       const rawDiff = await getPullDiff(cleanOwner, cleanRepo, pullNumber);
@@ -105,25 +127,36 @@ export async function POST(req: NextRequest) {
         diffContent = rawDiff;
       }
     } catch (err: any) {
-      // Large diff or GitHub 406 fallback: construct synthetic diff from file patches
+      // Large diff or GitHub 406 refusals still carry per-file patches.
+      diffError = err.message;
       console.warn(`Direct getPullDiff failed for PR #${pullNumber} (${err.message}), falling back to file patches.`);
-      
-      const fileSummary = files.map(f => `- ${f.filename} (${f.status}, +${f.additions}/-${f.deletions})`).join('\n');
-      const patchesSummary = files
-        .filter(f => f.patch)
-        .slice(0, 10)
-        .map(f => `--- ${f.filename} (${f.status}) ---\n${f.patch}`)
-        .join('\n\n');
+    }
 
-      diffContent = `Summary of Changed Files (${files.length} files total):\n${fileSummary}\n\nAvailable File Patches:\n${patchesSummary}`;
-      if (diffContent.length > MAX_DIFF_CHARS) {
-        diffContent = diffContent.slice(0, MAX_DIFF_CHARS) + '\n\n... [Patches summary truncated] ...';
+    if (!diffContent.trim()) {
+      const patchFiles = files.filter(f => f.patch);
+      if (patchFiles.length > 0) {
+        const fileSummary = files.map(f => `- ${f.filename} (${f.status}, +${f.additions}/-${f.deletions})`).join('\n');
+        const patchesSummary = patchFiles
+          .slice(0, 10)
+          .map(f => `--- ${f.filename} (${f.status}) ---\n${f.patch}`)
+          .join('\n\n');
+
+        diffContent = `Summary of Changed Files (${files.length} files total):\n${fileSummary}\n\nAvailable File Patches:\n${patchesSummary}`;
+        if (diffContent.length > MAX_DIFF_CHARS) {
+          diffContent = diffContent.slice(0, MAX_DIFF_CHARS) + '\n\n... [Patches summary truncated] ...';
+        }
+        diffTruncated = true;
+        warnings.push(`Full diff unavailable (${diffError}), reviewed individual file patches instead.`);
+      } else {
+        const reason = diffError || filesError || 'GitHub returned an empty diff for this pull request.';
+        console.warn(`Aborting review of PR #${pullNumber}: ${reason}`);
+        return NextResponse.json({ success: false, error: reason }, { status: 502 });
       }
-      diffTruncated = true;
     }
 
     // 4. Determine file metadata and focus areas
-    const primaryFile = files[0]?.filename || 'changeset.diff';
+    const diffFileNames = extractDiffFileNames(diffContent);
+    const primaryFile = files[0]?.filename || diffFileNames[0] || 'changeset.diff';
     const primaryLang = detectLanguage(primaryFile);
     const focusAreas = detectFocusAreas(files, diffContent);
     const prTitle = `PR #${pullNumber}: Changes in ${cleanRepo}`;
@@ -248,7 +281,8 @@ ${output.safer_rollout.map(s => `- ${s}`).join('\n')}${citationsText}
       run: newRun,
       review: output,
       diff_truncated: diffTruncated,
-      files_analyzed_count: files.length,
+      files_analyzed_count: files.length || diffFileNames.length,
+      warnings,
       github_comment_posted: gitHubReviewPosted,
       github_review_id: gitHubReviewId,
       retrieval_latency_ms: retrievalLatency,
