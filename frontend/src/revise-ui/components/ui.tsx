@@ -28,7 +28,7 @@ export const SeverityBadge = ({ severity }: { severity: Finding["severity"] }) =
 export const RiskBadge = ({ level }: { level: RiskScoreType["level"] }) => <Badge tone={level === "High" ? "danger" : level === "Medium" ? "warning" : "brand"}>{level} risk</Badge>;
 export function MetricCard({ label, value, detail }: { label: string; value: ReactNode; detail?: string }) {
   const match = typeof value === "string" ? value.match(/^(\d+)(%)?$/) : null;
-  return <Card><Text className="text-xs font-medium uppercase tracking-wider text-muted">{label}</Text><Text as="div" className="metric-value mt-2 font-mono text-xl font-semibold text-brand">{match ? <span className="metric-count" aria-label={value} data-suffix={match[2] ?? ""} style={{ "--metric-target": Number(match[1]) } as CSSProperties}/> : value}</Text>{detail && <Text className="mt-1 text-xs text-muted">{detail}</Text>}</Card>;
+  return <Card><Text className="text-xs font-medium uppercase tracking-wider text-muted">{label}</Text><Text as="div" className="metric-value mt-2 font-mono text-xl font-semibold text-brand">{match ? <span className="metric-count" aria-label={String(value)} data-suffix={match[2] ?? ""} style={{ "--metric-target": Number(match[1]) } as CSSProperties}/> : value}</Text>{detail && <Text className="mt-1 text-xs text-muted">{detail}</Text>}</Card>;
 }
 export function SectionHeader({ title, eyebrow, action }: { title: string; eyebrow?: string; action?: ReactNode }) {
   return <div className="mb-4 flex items-end justify-between gap-4"><div>{eyebrow && <Text className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-brand">{eyebrow}</Text>}<Heading level={2} className="text-lg">{title}</Heading></div>{action}</div>;
