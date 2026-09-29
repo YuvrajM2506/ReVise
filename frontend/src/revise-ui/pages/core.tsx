@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { navigate } from "../components/Shell";
 import { Badge, Button, Card, CodeBlock, EngineeringSignal, ErrorState, FindingCard, Heading, Input, LoadingState, MemoryCard, MemoryEvidence, MetricCard, PullRequestBadge, RecommendationCard, RepositoryBadge, RiskScore, SectionHeader, Select, StatusBadge, Tabs, Text, Textarea, TimelineItem, Toast } from "../components/ui";
+import { CodeEditorCard } from "../components/CodeEditor";
 import { demoReview, memories, timeline } from "../mocks/data";
 import { analyzeCode, analyzePullRequest, teachMemory } from "../services/revise";
 import type { Memory, Review } from "../types";
@@ -36,13 +37,87 @@ function ReviewResults({ review }: { review: Review }) {
 }
 
 export function ReviewPage({ mode }: { mode: "github" | "code" }) {
-  const [reference, setReference] = useState(mode === "github" ? "YuvrajM2506/ReVise · PR 12" : "export async function updateSession(input) {\n  await mutate(input)\n  return validateSession()\n}");
+  const [reference, setReference] = useState(mode === "github" ? "YuvrajM2506/ReVise · PR 12" : "");
   const [review, setReview] = useState<Review | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function runAnalysis() { setLoading(true); setReview(null); setError(null); try { const result = mode === "github" ? await analyzePullRequest(reference) : await analyzeCode(reference); setReview(result); } catch (err) { setError(err instanceof Error ? err.message : "Unable to analyze this request. Try again."); } finally { setLoading(false); } }
+
+  async function runAnalysis() {
+    setLoading(true);
+    setReview(null);
+    setError(null);
+    try {
+      const result = mode === "github"
+        ? await analyzePullRequest(reference)
+        : await analyzeCode(reference);
+      setReview(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to analyze this request. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function submit(event: FormEvent) { event.preventDefault(); await runAnalysis(); }
-  return <div className="animate-enter"><SectionHeader eyebrow={mode === "github" ? "Repository integration" : "Code analysis"} title={mode === "github" ? "Analyze Pull Request" : "Analyze code with memory"}/><Card><form onSubmit={submit} className="space-y-4"><Text as="label" className="block text-sm font-medium text-ink">{mode === "github" ? "Repository or pull request reference" : "Code or diff"}</Text>{mode === "github" ? <Input aria-label="Pull request reference" value={reference} onChange={event => setReference(event.target.value)}/> : <Textarea aria-label="Code to analyze" className="min-h-44 font-mono" value={reference} onChange={event => setReference(event.target.value)}/>}<div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center"><Text className="text-xs text-muted">ReVise will retrieve relevant engineering memory before review.</Text><Button className="w-full sm:w-auto" type="submit" disabled={loading || !reference}>{loading ? "Analyzing…" : mode === "github" ? "Analyze Pull Request" : "Analyze Code"}</Button></div></form></Card>{loading && <div className="mt-6"><LoadingState label="Analyzing Pull Request… Retrieving engineering memory… Reviewing changed files…"/></div>}{error && <div className="mt-6"><ErrorState title={mode === "github" ? "Unable to analyze this pull request." : "Unable to analyze this code."} detail={error} onRetry={runAnalysis}/></div>}{review && <ReviewResults review={review}/>}</div>;
+
+  return (
+    <div className="animate-enter">
+      <SectionHeader
+        eyebrow={mode === "github" ? "Repository integration" : "Code analysis"}
+        title={mode === "github" ? "Analyze Pull Request" : "Analyze code with memory"}
+      />
+
+      {mode === "github" ? (
+        /* ── GitHub PR mode (unchanged) ────────────────────────── */
+        <Card>
+          <form onSubmit={submit} className="space-y-4">
+            <Text as="label" className="block text-sm font-medium text-ink">
+              Repository or pull request reference
+            </Text>
+            <Input
+              aria-label="Pull request reference"
+              value={reference}
+              onChange={e => setReference(e.target.value)}
+            />
+            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+              <Text className="text-xs text-muted">
+                ReVise will retrieve relevant engineering memory before review.
+              </Text>
+              <Button className="w-full sm:w-auto" type="submit" disabled={loading || !reference}>
+                {loading ? "Analyzing…" : "Analyze Pull Request"}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      ) : (
+        /* ── Code / diff mode — new editor card ────────────────── */
+        <Card className="overflow-visible">
+          <CodeEditorCard
+            value={reference}
+            onChange={setReference}
+            onSubmit={runAnalysis}
+            loading={loading}
+          />
+        </Card>
+      )}
+
+      {loading && (
+        <div className="mt-6" aria-live="polite">
+          <LoadingState label="Retrieving engineering memory… Analyzing code…" />
+        </div>
+      )}
+      {error && (
+        <div className="mt-6">
+          <ErrorState
+            title={mode === "github" ? "Unable to analyze this pull request." : "Unable to analyze this code."}
+            detail={error}
+            onRetry={runAnalysis}
+          />
+        </div>
+      )}
+      {review && <ReviewResults review={review} />}
+    </div>
+  );
 }
 
 export function TeachPage() {
