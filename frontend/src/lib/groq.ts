@@ -3,12 +3,26 @@ import { addDiagnosticLog } from './storage';
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GROQ_PRIMARY_MODEL = process.env.GROQ_PRIMARY_MODEL || 'openai/gpt-oss-120b';
-const GROQ_FALLBACK_MODELS = [
-  process.env.GROQ_FALLBACK_MODEL || 'qwen-2.5-32b',
+/**
+ * Models Groq has retired. Requests against them fail fast with HTTP 400
+ * "model has been decommissioned", so selecting one only burns retry budget and
+ * wall-clock time. Kept as a filter rather than a comment so a stale
+ * GROQ_FALLBACK_MODEL value in .env costs zero requests instead of several.
+ */
+const DECOMMISSIONED_MODELS = new Set([
+  'qwen-2.5-32b',
   'llama-3.3-70b-versatile',
   'llama-3.1-70b-versatile',
   'mixtral-8x7b-32768',
-];
+]);
+
+// Ordered fallback chain, restricted to models Groq currently serves
+// (openai/gpt-oss-* and qwen/qwen3.8-27b at time of writing).
+const GROQ_FALLBACK_MODELS = [
+  process.env.GROQ_FALLBACK_MODEL || 'openai/gpt-oss-20b',
+  'openai/gpt-oss-20b',
+  'qwen/qwen3.8-27b',
+].filter(model => !DECOMMISSIONED_MODELS.has(model));
 
 interface EvaluateChangeParams {
   pr_title: string;
@@ -187,7 +201,9 @@ Evaluate this change and return the structured JSON object.`;
 
   // 1. If Groq API Key is configured, attempt live Groq inference
   if (GROQ_API_KEY && GROQ_API_KEY.startsWith('gsk_')) {
-    const candidateModels = [GROQ_PRIMARY_MODEL, ...GROQ_FALLBACK_MODELS];
+    const candidateModels = Array.from(
+      new Set([GROQ_PRIMARY_MODEL, ...GROQ_FALLBACK_MODELS].filter(m => !DECOMMISSIONED_MODELS.has(m)))
+    );
     for (const candidate of candidateModels) {
       try {
         const rawContent = await callGroqWithBackoff(messages, candidate);
