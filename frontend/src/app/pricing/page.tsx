@@ -1,6 +1,6 @@
+"use client";
 import React from 'react';
-import { SectionHeader } from '@/revise-ui/components/layout';
-import { Card, Heading, Text, Badge, Button } from '@/revise-ui/components/ui';
+import { Card, Heading, Text, Badge, Button, SectionHeader } from '@/revise-ui/components/ui';
 
 export default function PricingPage() {
   return (
@@ -28,10 +28,10 @@ export default function PricingPage() {
             <span className="text-sm text-muted"> / month</span>
           </div>
           <ul className="mb-8 flex-1 space-y-3 text-sm text-muted">
-            <li>• 1 Repository connection</li>
-            <li>• 30 PR reviews & fixes / month</li>
-            <li>• 50MB Hindsight Memory (Short-term)</li>
-            <li>• Community support</li>
+            <li>â€¢ 1 Repository connection</li>
+            <li>â€¢ 30 PR reviews & fixes / month</li>
+            <li>â€¢ 50MB Hindsight Memory (Short-term)</li>
+            <li>â€¢ Community support</li>
           </ul>
           <Button variant="secondary" className="w-full">Get Started</Button>
         </Card>
@@ -51,11 +51,11 @@ export default function PricingPage() {
             <span className="text-sm text-muted"> / repo / month</span>
           </div>
           <ul className="mb-8 flex-1 space-y-3 text-sm text-muted">
-            <li>• Up to 10 Repositories</li>
-            <li>• 500 PR reviews & fixes / month</li>
-            <li className="text-brand">• 1GB Deep Hindsight Memory</li>
-            <li>• Priority GitHub API Execution</li>
-            <li>• Slack & Teams Integrations</li>
+            <li>â€¢ Up to 10 Repositories</li>
+            <li>â€¢ 500 PR reviews & fixes / month</li>
+            <li className="text-brand">â€¢ 1GB Deep Hindsight Memory</li>
+            <li>â€¢ Priority GitHub API Execution</li>
+            <li>â€¢ Slack & Teams Integrations</li>
           </ul>
           <Button variant="primary" className="w-full">Start Free Trial</Button>
         </Card>
@@ -71,11 +71,11 @@ export default function PricingPage() {
             <span className="text-4xl font-bold">Custom</span>
           </div>
           <ul className="mb-8 flex-1 space-y-3 text-sm text-muted">
-            <li>• Unlimited Repositories & PRs</li>
-            <li className="text-brand">• Dedicated Vector Database</li>
-            <li>• Fine-tuned Models on your codebase</li>
-            <li>• On-Premise / VPC Deployment</li>
-            <li>• Dedicated 24/7 Support SLA</li>
+            <li>â€¢ Unlimited Repositories & PRs</li>
+            <li className="text-brand">â€¢ Dedicated Vector Database</li>
+            <li>â€¢ Fine-tuned Models on your codebase</li>
+            <li>â€¢ On-Premise / VPC Deployment</li>
+            <li>â€¢ Dedicated 24/7 Support SLA</li>
           </ul>
           <Button variant="secondary" className="w-full">Contact Sales</Button>
         </Card>
