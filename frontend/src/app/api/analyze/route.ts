@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { recallMemories } from '@/lib/hindsight';
+import { recallMemories, filterRelevantMemories } from '@/lib/hindsight';
 import { evaluateCodeChange } from '@/lib/groq';
 import { getStore, saveStore } from '@/lib/storage';
 import { EvaluationRun } from '@/lib/types';
@@ -8,14 +8,14 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
-      pr_title = 'PR #167: Add customer-region analytics to orders',
-      service = 'orders-service',
+      pr_title = 'Code analysis',
+      service = 'local-code',
       environment = 'Production',
       policy = 'Strict production policy',
-      focus_areas = ['Unsafe DB migration'],
+      focus_areas = ['General Review'],
       code_snippet = '',
-      file_name = 'migration_v167.sql',
-      language = 'PostgreSQL',
+      file_name = 'snippet.ts',
+      language = 'TypeScript',
       memory_enabled = true,
     } = body;
 
@@ -23,19 +23,34 @@ export async function POST(req: NextRequest) {
 
     // 1. Query Hindsight for top-k memories if memory is enabled
     let retrievedMemories: any[] = [];
+    let relevantMemories: any[] = [];
+    let excludedMemories: any[] = [];
     let retrievalLatency = 0;
 
     if (memory_enabled) {
+      const focusFilter = (focus_areas[0] === 'General Review' || focus_areas[0] === 'Configuration & Tooling') ? undefined : focus_areas[0];
       const recallResult = await recallMemories(
         `${pr_title} ${code_snippet.substring(0, 100)}`,
         {
           service,
-          focus_area: focus_areas[0],
+          focus_area: focusFilter,
           top_k: 4,
         }
       );
       retrievedMemories = recallResult.memories;
       retrievalLatency = recallResult.retrieval_latency_ms;
+
+      const filterResult = filterRelevantMemories(retrievedMemories, {
+        service,
+        files: [{ filename: file_name }],
+        diff_content: code_snippet,
+        focus_areas,
+        language,
+        pr_title,
+      });
+
+      relevantMemories = filterResult.relevant;
+      excludedMemories = filterResult.excluded;
     }
 
     // 2. Call Groq with structured output schema & memory injection
@@ -48,7 +63,7 @@ export async function POST(req: NextRequest) {
       code_snippet,
       file_name,
       language,
-      memories: retrievedMemories,
+      memories: relevantMemories,
       memory_enabled,
     });
 
@@ -81,6 +96,8 @@ export async function POST(req: NextRequest) {
       memory_enabled,
       retrieved_memories_count: retrievedMemories.length,
       retrieved_memory_ids: retrievedMemories.map(m => m.id),
+      relevant_memories_count: relevantMemories.length,
+      excluded_memories_count: excludedMemories.length,
       output: evalResult.output,
       execution_latency_ms: totalLatency,
     };
@@ -96,6 +113,10 @@ export async function POST(req: NextRequest) {
       success: true,
       run_id: runId,
       run: newRun,
+      retrieved_memories_count: retrievedMemories.length,
+      relevant_memories_count: relevantMemories.length,
+      excluded_memories_count: excludedMemories.length,
+      excluded_memories: excludedMemories,
       retrieval_latency_ms: retrievalLatency,
       total_latency_ms: totalLatency,
     });
