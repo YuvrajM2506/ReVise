@@ -1,5 +1,5 @@
-import { demoReview, memories, standards, timeline } from "../mocks/data";
-import type { EngineeringStandard, Memory, Review, TimelineEvent } from "../types";
+import { countChangeStats } from "@/lib/diff-stats";
+import type { CICheck, EngineeringStandard, Memory, Review, SettingsSections, TimelineEvent } from "../types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...init });
@@ -61,6 +61,7 @@ function mapMemoryCitation(m: any) {
 
 function mapRunToReview(run: any, reference = "ReVise", meta?: { filesChanged?: number; linesChanged?: number; changedFiles?: any[]; totalRetrievedMemories?: number; relevantMemoriesCount?: number; excludedMemoriesCount?: number }) : Review {
   const output = run.output || {};
+  const stats = countChangeStats(String(run.code_snippet || ""));
   const riskLevel = output.risk_level || (run.status === "HIGH RISK" ? "High" : run.status === "MEDIUM RISK" ? "Medium" : "Low");
   const findings = (output.findings || []).map((f: any, i: number) => ({
     id: f.id || `finding-${i}`,
@@ -88,21 +89,31 @@ function mapRunToReview(run: any, reference = "ReVise", meta?: { filesChanged?: 
       author: { id: "revise", name: "ReVise", handle: "ReVise" },
       repository: { id: "repo", owner: reference.split("/")[0] || "local", name: reference.split("/")[1]?.split(" ")[0] || "repository", branch: "main", visibility: "Public" },
       status: "Open",
-      filesChanged,
-      linesChanged,
+// Real counters persisted by the analyze routes win; for runs stored before
+      // those were recorded, fall back to what the reviewed text supports rather
+      // than publishing a misleading zero.
+      filesChanged: filesChanged || stats.files_changed,
+      linesChanged: linesChanged || stats.lines_changed,
     },
     risk: { score: Number(output.risk_score || 0), level: riskLevel as any },
-    status: run.status === "HIGH RISK" || run.status === "MEDIUM RISK" ? "Complete" : "Complete",
+    status: "Complete",
     summary: output.summary || "ReVise completed a memory-informed code review.",
     findings,
     memories: memoriesMapped,
     totalRetrievedMemories,
     relevantMemoriesCount,
     excludedMemoriesCount,
-    saferRollout: output.safer_rollout || [],
-    whyRecommendation: output.why_recommendation || "",
     changedFiles,
     createdAt: run.created_at || new Date().toISOString(),
+    // Real fields the API returns. Passed through so the report can show the
+    // remediation the model actually proposed instead of generic placeholders.
+    service: run.service,
+    language: run.language,
+    provenanceNote: output.provenance_note,
+    whyRecommendation: output.why_recommendation,
+    saferRollout: Array.isArray(output.safer_rollout) ? output.safer_rollout : [],
+    ciChecks: Array.isArray(output.ci_checks) ? (output.ci_checks as CICheck[]) : [],
+    memoryEnabled: run.memory_enabled,
   };
 }
 
@@ -170,32 +181,59 @@ export async function teachMemory(input: Partial<Memory>): Promise<Memory> {
   };
 }
 
-export const getMemories = async (): Promise<Memory[]> => {
-  try { return await request("/api/memory"); } catch { return memories; }
-};
+/**
+ * Strict reads. These throw instead of substituting a bundled demo dataset, so
+ * every view distinguishes "no data" from "the endpoint failed".
+ */
+export const getMemoriesStrict = (): Promise<Memory[]> => request<Memory[]>("/api/memory");
 
-export const getTimeline = async (): Promise<TimelineEvent[]> => {
-  try {
-    const result = await request<any>("/api/timeline");
-    return (result.timeline || []).map((n: any) => ({
-      id: n.id, type: "Memory Reinforced", time: n.date, title: n.title, detail: n.subtitle, source: n.service, confidence: 90,
-    }));
-  } catch { return timeline; }
-};
+async function fetchTimeline(): Promise<TimelineEvent[]> {
+  const result = await request<any>("/api/timeline");
+  return (result.timeline || []).map((n: any) => ({
+    id: n.id, type: "Memory Reinforced", time: n.date, title: n.title, detail: n.subtitle, source: n.service, confidence: 90,
+  }));
+}
 
-export const getStandards = async (): Promise<EngineeringStandard[]> => {
-  try {
-    const result = await request<any>("/api/standards");
-    return (result.standards || []).map((s: any) => ({
-      id: s.id, title: s.title, description: s.description,
-      category: s.category === "Database" || s.category === "Secrets" ? "Security" : s.category === "API Design" ? "Architecture" : s.category === "Deployment" ? "Performance" : "Engineering",
-      source: s.inferred_from?.incident_names?.[0] || "ReVise memory",
-      confidence: s.confidence_score || 85,
-      lastReinforced: s.updated_at || "Recently",
-      usageCount: s.inferred_from?.source_ids?.length || 0,
-    }));
-  } catch { return standards; }
-};
+export const getTimelineStrict = (): Promise<TimelineEvent[]> => fetchTimeline();
+
+/** Live memory-bank totals and connection state. */
+export interface PulseSummary {
+  total_memories: number;
+  remediation_patterns_count: number;
+  repeated_risks_count: number;
+  growth_sparkline: number[];
+  hindsight_connected: boolean;
+  hindsight_mode?: "live_cloud" | "local_resilient";
+  last_sync_timestamp: string | null;
+}
+
+export async function getPulse(): Promise<PulseSummary> {
+  const result = await request<{ pulse: PulseSummary }>("/api/pulse");
+  return result.pulse;
+}
+
+/** Every stored review, newest first. Throws rather than substituting demo data. */
+export async function getStoredReviews(): Promise<Review[]> {
+  const result = await request<{ runs?: any[] }>("/api/runs");
+  return (result.runs || []).map(run => mapRunToReview(run, run.title || "ReVise"));
+}
+
+function mapStandards(result: any): EngineeringStandard[] {
+  return (result.standards || []).map((s: any) => ({
+    id: s.id, title: s.title, description: s.description,
+    category: s.category === "Database" || s.category === "Secrets" ? "Security" : s.category === "API Design" ? "Architecture" : s.category === "Deployment" ? "Performance" : "Engineering",
+    source: s.inferred_from?.incident_names?.[0] || "ReVise memory",
+    confidence: s.confidence_score || 85,
+    lastReinforced: s.updated_at || "Recently",
+    usageCount: s.inferred_from?.source_ids?.length || 0,
+  }));
+}
+
+/** Strict standards read: throws instead of substituting a bundled demo set. */
+export async function getStandardsStrict(): Promise<EngineeringStandard[]> {
+  const result = await request<any>("/api/standards");
+  return mapStandards(result);
+}
 
 export async function sendPairMessage(message: string): Promise<string> {
   try {
@@ -204,6 +242,22 @@ export async function sendPairMessage(message: string): Promise<string> {
   } catch { return "ReVise could not reach the memory-aware pair assistant. Check the Next.js server and try again."; }
 }
 
-export async function saveSettings(settings: Record<string, unknown>): Promise<void> {
-  await request("/api/settings", { method: "PUT", body: JSON.stringify(settings) });
+export async function getSettings(): Promise<SettingsSections> {
+  const result = await request<{ settings?: SettingsSections }>("/api/settings");
+  return result.settings || {};
+}
+
+/**
+ * Persist a single settings tab. Throws with the server's reason on failure, so
+ * the settings view can report a real outcome instead of assuming success.
+ */
+export async function saveSettings(tab: string, values: Record<string, string>): Promise<void> {
+  await request("/api/settings", { method: "PUT", body: JSON.stringify({ tab, values }) });
+}
+
+/** Load one stored review by id, for the report route. */
+export async function getRunReview(id: string): Promise<Review> {
+  const result = await request<any>(`/api/runs/${encodeURIComponent(id)}`);
+  if (!result.success) throw new Error(result.error || "Review not found");
+  return mapRunToReview(result.run, result.run?.title || "ReVise");
 }

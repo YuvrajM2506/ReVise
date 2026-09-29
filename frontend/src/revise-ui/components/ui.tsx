@@ -1,7 +1,20 @@
-import { useState, type ButtonHTMLAttributes, type CSSProperties, type HTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
-import type { Finding, Memory, MemoryEvidence as MemoryEvidenceType, RiskScore as RiskScoreType, TimelineEvent } from "../types";
+import { useEffect, useState, type ButtonHTMLAttributes, type CSSProperties, type HTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import type { Finding, Memory, MemoryEvidence as MemoryEvidenceType, RiskScore as RiskScoreType, TimelineEvent } from "../types";const cx = (...classes: Array<string | false | undefined>) => classes.filter(Boolean).join(" ");
 
-const cx = (...classes: Array<string | false | undefined>) => classes.filter(Boolean).join(" ");
+/** Shared dismiss behaviour for overlays: Escape closes, body scroll is locked. */
+function useOverlay(open: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, onClose]);
+}
 
 export function Heading({ level = 2, className, children }: { level?: 1 | 2 | 3 | 4; className?: string; children: ReactNode }) {
   const Tag = `h${level}` as keyof JSX.IntrinsicElements;
@@ -53,17 +66,19 @@ export function TimelineItem({ event }: { event: TimelineEvent }) {
 export const RepositoryBadge = ({ name }: { name: string }) => <Badge tone="brand">{name}</Badge>;
 export const PullRequestBadge = ({ number }: { number: number }) => <Badge>PR #{number}</Badge>;
 export function Modal({ open, title, children, onClose }: { open: boolean; title: string; children: ReactNode; onClose: () => void }) {
+  useOverlay(open, onClose);
   if (!open) return null;
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-canvas/80 p-4" role="dialog" aria-modal="true"><Card className="modal-motion max-h-[85vh] w-full max-w-xl overflow-y-auto bg-surface-raised"><div className="mb-4 flex items-center justify-between"><Heading level={2} className="text-lg">{title}</Heading><IconButton label="Close" onClick={onClose}>×</IconButton></div>{children}</Card></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-canvas/80 p-4" role="dialog" aria-modal="true" aria-label={title} onClick={event => { if (event.target === event.currentTarget) onClose(); }}><Card className="modal-motion max-h-[85vh] w-full max-w-xl overflow-y-auto bg-surface-raised"><div className="mb-4 flex items-center justify-between"><Heading level={2} className="text-lg">{title}</Heading><IconButton label="Close" onClick={onClose}>×</IconButton></div>{children}</Card></div>;
 }
 export function Drawer({ open, title, children, onClose }: { open: boolean; title: string; children: ReactNode; onClose: () => void }) {
+  useOverlay(open, onClose);
   if (!open) return null;
-  return <div className="fixed inset-0 z-50 flex justify-end bg-canvas/70" role="dialog" aria-modal="true"><div className="drawer-motion h-full w-full max-w-md overflow-y-auto border-l border-line bg-surface p-5"><div className="mb-5 flex items-center justify-between"><Heading level={2} className="text-lg">{title}</Heading><IconButton label="Close" onClick={onClose}>×</IconButton></div>{children}</div></div>;
+  return <div className="fixed inset-0 z-50 flex justify-end bg-canvas/70" role="dialog" aria-modal="true" aria-label={title} onClick={event => { if (event.target === event.currentTarget) onClose(); }}><div className="drawer-motion h-full w-full max-w-md overflow-y-auto border-l border-line bg-surface p-5"><div className="mb-5 flex items-center justify-between"><Heading level={2} className="text-lg">{title}</Heading><IconButton label="Close" onClick={onClose}>×</IconButton></div>{children}</div></div>;
 }
 export function Tabs({ tabs, active, onChange }: { tabs: string[]; active: string; onChange: (tab: string) => void }) {
   return <div className="flex gap-1 overflow-x-auto border-b border-line" role="tablist">{tabs.map(tab => <Button key={tab} role="tab" aria-selected={active === tab} variant="ghost" onClick={() => onChange(tab)} className={cx("shrink-0 rounded-none border-b-2", active === tab ? "border-brand text-ink" : "border-transparent")}>{tab}</Button>)}</div>;
 }
-export function Toast({ message }: { message?: string }) { return message ? <div className="toast-motion fixed bottom-5 right-5 z-50 rounded-md border border-brand/30 bg-surface-raised px-4 py-3 text-sm text-ink">{message}</div> : null; }
+export function Toast({ message }: { message?: string }) { return message ? <div className="toast-motion fixed bottom-5 right-5 z-50 rounded-md border border-brand/30 bg-surface-raised px-4 py-3 text-sm text-ink" role="status" aria-live="polite">{message}</div> : null; }
 export function Tooltip({ label, children }: { label: string; children: ReactNode }) { return <span title={label}>{children}</span>; }
 export function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) { return <Card className="grid min-h-48 place-items-center text-center"><div><Heading level={3} className="text-base">{title}</Heading><Text className="mx-auto mt-2 max-w-md text-sm text-muted">{detail}</Text>{action && <div className="mt-4">{action}</div>}</div></Card>; }
 export function LoadingState({ label = "Loading…" }: { label?: string }) { return <Card className="loading-shimmer flex min-h-40 items-center justify-center gap-3 text-sm text-muted"><span className="size-3 animate-pulse rounded-full bg-brand"/>{label}</Card>; }
