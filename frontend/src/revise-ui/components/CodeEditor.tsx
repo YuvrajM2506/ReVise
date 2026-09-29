@@ -62,11 +62,11 @@ index 3a2f1b..8c9d4e 100644
  }`;
 
 const INITIAL_MEMORY_SOURCES: MemorySource[] = [
-  { id: "standards",  label: "Team standards",    active: true  },
-  { id: "pr",         label: "Past PR feedback",  active: true  },
-  { id: "bugs",       label: "Known bugs",        active: true  },
-  { id: "arch",       label: "Architecture ADRs", active: false },
-  { id: "perf",       label: "Performance rules", active: false },
+  { id: "standards", label: "Team standards", active: true },
+  { id: "pr", label: "Past PR feedback", active: true },
+  { id: "bugs", label: "Known bugs", active: true },
+  { id: "arch", label: "Architecture ADRs", active: false },
+  { id: "perf", label: "Performance rules", active: false },
 ];
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -192,13 +192,13 @@ function MemoryChips({
 
 // ─── main component ───────────────────────────────────────────────────────────
 export function CodeEditorCard({ value, onChange, onSubmit, loading, submitLabel = "Analyze Code" }: CodeEditorCardProps) {
-  const [language, setLanguage]           = useState<Language>("Auto-detect");
-  const [mode, setMode]                   = useState<InputMode>("Code");
+  const [language, setLanguage] = useState<Language>("Auto-detect");
+  const [mode, setMode] = useState<InputMode>("Code");
   const [memorySources, setMemorySources] = useState(INITIAL_MEMORY_SOURCES);
-  const [focused, setFocused]             = useState(false);
-  const textareaRef                       = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef                      = useRef<HTMLInputElement>(null);
-  const gutterRef                         = useRef<HTMLDivElement>(null);
+  const [focused, setFocused] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
 
   const { lines, chars } = countLinesAndChars(value);
   const isEmpty = value.trim() === "";
