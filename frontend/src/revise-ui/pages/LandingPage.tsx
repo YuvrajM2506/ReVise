@@ -95,7 +95,7 @@ export default function LandingPage() {
       <div className={styles.ambient} aria-hidden="true"/>
       <header className={styles.header}>
         <a className={styles.brand} href="/" aria-label="ReVise home"><span className={styles.brandMark}><span/></span><span>ReVise</span></a>
-        <nav className={styles.nav} aria-label="Main navigation"><a href="/analyze">Analyze</a><a href="/github-review">PR Review</a><a href="/memory">Memory</a><a href="/pair-programmer">Pair Programmer</a></nav>
+        <nav className={styles.nav} aria-label="Main navigation"><a href="/analyze">Analyze</a><a href="/github-review">PR Review</a><a href="/memory">Memory</a><a href="/pair-programmer">Pair Programmer</a><a href="/cli-docs">CLI Docs</a></nav>
         <a className={styles.navCta} href="/dashboard">Open Dashboard <ArrowUpRight size={14}/></a>
       </header>
 
@@ -133,13 +133,74 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section className={styles.cliSection} id="cli">
+        <div className={styles.cliCopy}>
+          <span className={styles.sectionKicker}>DEVELOPER-FIRST TERMINAL & CI/CD</span>
+          <h2>Memory-aware review<br/>in your <span>terminal.</span></h2>
+          <p>
+            Run reviews on local branches, staged diffs, or gate CI/CD pull requests with risk thresholds — all powered by the same Hindsight memory bank.
+          </p>
+          <div className={styles.cliActionRow}>
+            <a className={styles.primaryButton} href="/cli-docs">
+              Explore CLI Docs <ArrowRight size={16}/>
+            </a>
+            <div className={styles.cliSnippet}>
+              <span>$</span>
+              <code>npm run revise -- review</code>
+            </div>
+          </div>
+          <div className={styles.cliHighlights}>
+            <div><span className={styles.cliDot}/><span><strong>CI/CD Gate:</strong> Block high-risk PRs with <code>--fail-on HIGH</code></span></div>
+            <div><span className={styles.cliDot}/><span><strong>Zero Setup:</strong> Resilient offline simulator when keys are omitted</span></div>
+            <div><span className={styles.cliDot}/><span><strong>Causal Attribution:</strong> Real historical incident citations</span></div>
+          </div>
+        </div>
+        <div className={styles.cliTerminalCard}>
+          <div className={styles.terminalBar}>
+            <div className={styles.windowDots}><i/><i/><i/></div>
+            <span><TerminalSquare size={13}/> revise · review</span>
+            <span className={styles.openState}><span/> HINDSIGHT LIVE</span>
+          </div>
+          <div className={styles.cliTerminalBody}>
+            <div className={styles.cliCommandRow}>
+              <span className={styles.cliPrompt}>$</span>
+              <span className={styles.cliCommand}>git diff | revise review - --fail-on HIGH</span>
+            </div>
+            <div className={styles.cliOutput}>
+              <div className={styles.cliEvalHeader}>
+                <span className={styles.cliRiskBadge}>RISK 78 / 100 · HIGH</span>
+                <span className={styles.cliMemCitation}><BrainCircuit size={12}/> Grounded in 4 memories</span>
+              </div>
+              <div className={styles.cliFinding}>
+                <div className={styles.cliFindingTitle}>
+                  <span className={styles.cliSeverityHigh}>● HIGH</span>
+                  <span>Session mutated prior to validation assert</span>
+                </div>
+                <div className={styles.cliFindingFile}>src/auth/session.ts:48</div>
+                <div className={styles.cliCitationBox}>
+                  <strong>Cites INC-208</strong> · Authentication regression (orders-service)<br/>
+                  <em>“Validate before writing session state to prevent privilege escalation.”</em>
+                </div>
+              </div>
+              <div className={styles.cliGateResult}>
+                <span>✕ CI GATE FAILED:</span> Risk score 78 exceeds threshold HIGH (Exit code: 1)
+              </div>
+            </div>
+          </div>
+          <a className={styles.terminalInput} href="/cli-docs" aria-label="Explore CLI Documentation">
+            <span>View all 11 CLI commands & examples</span>
+            <span><ArrowUpRight size={14}/></span>
+          </a>
+        </div>
+      </section>
+
       <section className={styles.featuresSection} id="features"><div className={styles.featuresHeader}><div><span className={styles.sectionKicker}>BUILT FOR THE WAY TEAMS SHIP</span><h2>More signal in every review.</h2></div><p>Institutional knowledge, available exactly when a change needs it.</p></div><div className={styles.featuresGrid}>{features.map(({ icon: Icon, title, text, href }, index) => <a className={styles.feature} href={href} key={title}><span className={styles.featureIndex}>0{index + 1}</span><span className={styles.featureIcon}><Icon size={18}/></span><h3>{title}</h3><p>{text}</p><span className={styles.featureAction}>Explore <ArrowRight size={12}/></span><ArrowUpRight className={styles.featureArrow} size={15}/></a>)}</div></section>
 
       <section className={styles.archSection} id="architecture"><div className={styles.archHeader}><div><span className={styles.sectionKicker}>A SYSTEM THAT GETS WISER</span><h2>Built around memory.<br/>Designed for your stack.</h2></div><p>Purpose-built components connect review workflows to a durable, searchable history of engineering decisions.</p></div><div className={styles.archDiagram}><a className={styles.archNode} href="/github-review"><span><GitPullRequest size={18}/></span><strong>Code changes</strong><small>GitHub · local diff</small></a><div className={styles.archConnector}><i/><span>ingest</span><i/></div><a className={`${styles.archNode} ${styles.archNodeAccent}`} href="/analyze"><span><BrainCircuit size={18}/></span><strong>ReVise agent</strong><small>Review · reason · learn</small></a><div className={styles.archConnector}><i/><span>retrieve</span><i/></div><a className={styles.archNode} href="/memory"><span><MemoryStick size={18}/></span><strong>Hindsight memory</strong><small>Episodes · facts · links</small></a><div className={styles.archConnector}><i/><span>evidence</span><i/></div><a className={styles.archNode} href="/dashboard"><span><Code2 size={18}/></span><strong>Actionable review</strong><small>Findings · rollout · learn</small></a></div><div className={styles.archFoot}><span><LockKeyhole size={13}/> Your engineering context stays yours</span><span><a href="/settings">Configure workspace <ArrowUpRight size={11}/></a> <i/> <a href="/github-backfill">Import GitHub history <ArrowUpRight size={11}/></a></span></div></section>
 
       <section className={styles.finalCta}><div className={styles.ctaGlow}/><div className={styles.ctaMark}><span/></div><span className={styles.sectionKicker}>THE NEXT REVIEW CAN KNOW MORE</span><h2>Give your code review<br/>a memory.</h2><p>Make every past lesson useful for the next change.</p><div className={styles.ctaActions}><a className={styles.primaryButton} href="/analyze">Analyze Code <ArrowRight size={16}/></a><a className={styles.secondaryButton} href="/teach">Teach ReVise <ArrowUpRight size={14}/></a></div><span className={styles.ctaFine}>Start with a diff. Bring your team's history.</span></section>
 
-      <footer className={styles.footer}><a className={styles.brand} href="/" aria-label="ReVise home"><span className={styles.brandMark}><span/></span><span>ReVise</span></a><span>AI code review that remembers.</span><div><a href="/dashboard">Dashboard</a><a href="/analyze">Analyze</a><a href="/github-review">PR Review</a><a href="/memory">Memory</a><a href="/timeline">Timeline</a><a href="/teach">Teach ReVise</a><a href="/pair-programmer">Pair Programmer</a><a href="/github-backfill">Import history</a><a href="/standards">Standards</a><a href="/settings">Settings</a><a href="/dashboard">Reports</a><a href="#how-it-works">How it works</a><a href="#architecture">Architecture</a></div><span className={styles.footerVersion}>HINDSIGHT MEMORY · AIDER-POWERED</span></footer>
+      <footer className={styles.footer}><a className={styles.brand} href="/" aria-label="ReVise home"><span className={styles.brandMark}><span/></span><span>ReVise</span></a><span>AI code review that remembers.</span><div><a href="/dashboard">Dashboard</a><a href="/analyze">Analyze</a><a href="/github-review">PR Review</a><a href="/memory">Memory</a><a href="/timeline">Timeline</a><a href="/cli-docs">CLI Docs</a><a href="/teach">Teach ReVise</a><a href="/pair-programmer">Pair Programmer</a><a href="/github-backfill">Import history</a><a href="/standards">Standards</a><a href="/settings">Settings</a><a href="/dashboard">Reports</a><a href="#how-it-works">How it works</a><a href="#architecture">Architecture</a></div><span className={styles.footerVersion}>HINDSIGHT MEMORY · AIDER-POWERED</span></footer>
     </main>
   );
 }

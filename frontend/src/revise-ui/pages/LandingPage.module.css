@@ -128,6 +128,53 @@
 .archFoot > span:last-child svg { vertical-align: middle; }
 .ctaActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .footer > div { flex-wrap: wrap; justify-content: flex-end; }
+
+/* CLI Section */
+.cliSection {
+  display: grid;
+  grid-template-columns: .88fr 1.12fr;
+  align-items: center;
+  gap: 75px;
+  width: min(1050px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 98px 0 112px;
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+.cliCopy h2 { font-size: 40px; margin: 17px 0 0; }
+.cliCopy > p { max-width: 420px; margin: 16px 0 0; color: #9697a8; font-size: 12px; line-height: 1.9; }
+.cliActionRow { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 26px; }
+.cliSnippet { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid rgba(2,160,160,.25); border-radius: 6px; background: rgba(2,160,160,.04); font: 10px "JetBrains Mono", monospace; color: #b7e3e3; }
+.cliSnippet span { color: #62baba; font-weight: 700; }
+.cliHighlights { display: flex; flex-direction: column; gap: 10px; margin-top: 28px; }
+.cliHighlights > div { display: flex; align-items: center; gap: 9px; color: #8a8b9c; font-size: 10px; }
+.cliHighlights code { color: #8cd6d6; font: 9px "JetBrains Mono", monospace; }
+.cliHighlights strong { color: #d0cfda; }
+.cliDot { width: 4px; height: 4px; border-radius: 50%; background: #02a0a0; box-shadow: 0 0 6px #02a0a0; flex-shrink: 0; }
+.cliTerminalCard { overflow: hidden; border: 1px solid rgba(2,160,160,.2); border-radius: 7px; background: linear-gradient(150deg, rgba(16,22,28,.98), rgba(9,13,18,.98)); box-shadow: 0 20px 60px rgba(0,0,0,.35), 0 0 40px rgba(2,160,160,.06); }
+.cliTerminalBody { padding: 16px; font-family: "JetBrains Mono", monospace; font-size: 9px; }
+.cliCommandRow { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,.07); color: #fff; font-weight: 600; font-size: 10px; }
+.cliPrompt { color: #62baba; }
+.cliCommand { color: #d8f3f3; }
+.cliOutput { padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.cliEvalHeader { display: flex; align-items: center; justify-content: space-between; }
+.cliRiskBadge { display: inline-flex; padding: 2px 7px; border: 1px solid rgba(242,139,130,.3); border-radius: 4px; color: #f28b82; background: rgba(242,139,130,.08); font-weight: 700; font-size: 8px; }
+.cliMemCitation { display: inline-flex; align-items: center; gap: 5px; color: #62baba; font-size: 8px; }
+.cliFinding { padding: 10px; border: 1px solid rgba(242,139,130,.18); border-radius: 5px; background: rgba(242,139,130,.03); }
+.cliFindingTitle { display: flex; align-items: center; gap: 6px; color: #e9e7ee; font-weight: 600; font-size: 9px; }
+.cliSeverityHigh { color: #f28b82; font-size: 8px; font-weight: 700; }
+.cliFindingFile { margin-top: 3px; color: #7f8090; font-size: 8px; }
+.cliCitationBox { margin-top: 8px; padding: 6px 8px; border-left: 2px solid #02a0a0; background: rgba(2,160,160,.04); color: #94adad; font-size: 8px; line-height: 1.6; }
+.cliCitationBox strong { color: #8cd6d6; }
+.cliGateResult { padding: 7px 10px; border-radius: 4px; background: rgba(242,139,130,.06); color: #f28b82; font-size: 8px; }
+.cliGateResult span { font-weight: 700; }
+
+@media (max-width: 1000px) {
+  .cliSection { gap: 42px; }
+}
+@media (max-width: 760px) {
+  .cliSection { grid-template-columns: 1fr; gap: 28px; padding: 75px 0 82px; width: min(100% - 40px, 560px); }
+  .cliCopy h2 { font-size: 38px; }
+}
 @media (max-width: 520px) {
   .nav a:nth-child(2) { display: none; }
   .moduleLinks { gap: 10px 16px; }
@@ -135,4 +182,6 @@
   .memoryQuote p { min-width: calc(100% - 48px); }
   .memoryQuoteAction { margin-left: 38px; }
   .footer > div { justify-content: flex-start; }
+  .cliSection { width: calc(100% - 36px); }
+  .cliCopy h2 { font-size: 34px; }
 }

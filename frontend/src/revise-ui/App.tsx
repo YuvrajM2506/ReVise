@@ -7,6 +7,7 @@ import { HomePage, ReviewPage, TeachPage } from "./pages/core";
 import { MemoryPage, TimelinePage } from "./pages/memory";
 import { PairProgrammerPage, ReportPage, SettingsPage, StandardsPage } from "./pages/remaining";
 import PricingPage from "@/app/pricing/page";
+import CliDocsPage from "./pages/CliDocsPage";
 
 /** Renders the empty-state card as a link-button via Shell's navigate. */
 function NotFoundState() {
@@ -43,8 +44,8 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundary
   }
 }
 
-export default function App() {
-  const [path, setPath] = useState("/");
+export default function App({ initialPath }: { initialPath?: string } = {}) {
+  const [path, setPath] = useState(() => initialPath || (typeof window !== "undefined" ? window.location.pathname : "/"));
   useEffect(() => {
     const sync = () => setPath(window.location.pathname);
     sync();
@@ -64,5 +65,6 @@ export default function App() {
   if (path === "/standards") page = <StandardsPage/>;
   if (path === "/settings") page = <SettingsPage/>;
   if (path === "/pricing") page = <PricingPage/>;
+  if (path === "/cli-docs" || path === "/cli") page = <CliDocsPage/>;
   return <Shell path={path}><PageErrorBoundary key={path}><div className="page-transition">{page}</div></PageErrorBoundary></Shell>;
 }

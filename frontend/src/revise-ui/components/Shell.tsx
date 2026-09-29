@@ -9,11 +9,11 @@ import AmbientBackground from "./AmbientBackground";
  */
 const navItems: Array<[string, string]> = [
   ["Home", "/dashboard"], ["Analyze", "/analyze"], ["Pull Request Review", "/github-review"],
-  ["Pair Programmer", "/pair-programmer"], ["Memory", "/memory"], ["Timeline", "/timeline"],
+  ["Pair Programmer", "/pair-programmer"], ["CLI Docs", "/cli-docs"], ["Memory", "/memory"], ["Timeline", "/timeline"],
   ["Reports", "/dashboard"], ["Standards", "/standards"], ["Teach ReVise", "/teach"],
   ["Pricing", "/pricing"], ["Settings", "/settings"],
 ];
-const marks = ["H", "A", "GH", "PP", "M", "TL", "R", "ST", "T", "P", "S"];
+const marks = ["H", "A", "GH", "PP", "CLI", "M", "TL", "R", "ST", "T", "P", "S"];
 
 export function navigate(path: string) {
   window.history.pushState({}, "", path);

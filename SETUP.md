@@ -127,12 +127,27 @@ cd frontend
 npm test
 ```
 
-Expect `# tests 27` · `# pass 27` · `# fail 0`. These run on Node's built-in test runner via `tsx`,
-so there is nothing extra to install and no server has to be running. They cover the diff/line
-counters and the pull request reference parser — the two pieces of pure logic that decide how much a
-review claims to have read and whether a pasted PR URL is accepted at all.
+Expect `# tests 32` · `# pass 32` · `# fail 0`. These run on Node's built-in test runner via `tsx`,
+so there is nothing extra to install and no server has to be running. They cover diff/line counters,
+the pull request reference parser, and CLI subcommands/dispatching.
 
-### Step F — Development server (port 3000)
+### Step F — Try the ReVise CLI
+
+```bash
+# Run CLI health doctor
+npm run revise -- doctor
+
+# Inspect engineering memories
+npm run revise -- memory list
+
+# Review working tree or a public PR
+npm run revise -- review https://github.com/physicshub/physicshub.github.io/pull/391
+
+# Interactive pair programmer REPL
+npm run revise -- chat
+```
+
+### Step G — Development server (port 3000)
 
 ```bash
 cd frontend
