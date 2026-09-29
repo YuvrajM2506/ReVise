@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { navigate } from "../components/Shell";
 import { Badge, Button, Card, CodeBlock, EmptyState, EngineeringSignal, ErrorState, FindingCard, Heading, Input, LoadingState, MemoryCard, MemoryEvidence, MetricCard, PullRequestBadge, RecommendationCard, RepositoryBadge, RiskScore, SectionHeader, Select, StatusBadge, Tabs, Text, Textarea, TimelineItem, Toast } from "../components/ui";
+import { CodeEditorCard } from "../components/CodeEditor";
 import {
   analyzeCode,
   analyzePullRequest,
@@ -109,7 +110,7 @@ function ReviewResults({ review }: { review: Review }) {
 const isGitHubPrUrl = (url: string) => /^(?:https?:\/\/)?(?:www\.)?github\.com\/[^\s/]+\/[^\s/]+\/pull\/\d+/i.test(url.trim());
 
 export function ReviewPage({ mode }: { mode: "github" | "code" }) {
-  const [reference, setReference] = useState(mode === "github" ? "YuvrajM2506/ReVise · PR 12" : "export async function updateSession(input) {\n  await mutate(input)\n  return validateSession()\n}");
+  const [reference, setReference] = useState(mode === "github" ? "YuvrajM2506/ReVise · PR 6" : "export async function updateSession(input) {\n  await mutate(input)\n  return validateSession()\n}");
   const [review, setReview] = useState<Review | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,19 +138,28 @@ export function ReviewPage({ mode }: { mode: "github" | "code" }) {
   return (
     <div className="animate-enter">
       <SectionHeader eyebrow={mode === "github" ? "Repository integration" : "Code analysis"} title={mode === "github" ? "Analyze Pull Request" : "Analyze code with memory"}/>
-      <Card>
-        <form onSubmit={submit} className="space-y-4">
-          <Text as="label" className="block text-sm font-medium text-ink">{mode === "github" ? "Repository or pull request reference" : "Code or diff"}</Text>
-          {mode === "github" ? <Input aria-label="Pull request reference" value={reference} onChange={event => setReference(event.target.value)}/> : <Textarea aria-label="Code to analyze" className="min-h-44 font-mono" value={reference} onChange={event => setReference(event.target.value)}/>}
-          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-            <Text className="text-xs text-muted">ReVise will retrieve relevant engineering memory before review.</Text>
-            <Button className="w-full sm:w-auto" type="submit" disabled={loading || !reference}>
-              {loading ? "Analyzing…" : isPr ? "Analyze Pull Request" : "Analyze Code"}
-            </Button>
-          </div>
-        </form>
-      </Card>
-      {loading && <div className="mt-6"><LoadingState label={isPr ? "Analyzing Pull Request… Retrieving engineering memory… Reviewing changed files…" : "Analyzing code… Retrieving engineering memory… Reviewing the snippet…"}/></div>}
+      {mode === "github" ? (
+        <Card>
+          <form onSubmit={submit} className="space-y-4">
+            <Text as="label" className="block text-sm font-medium text-ink">Repository or pull request reference</Text>
+            <Input aria-label="Pull request reference" value={reference} onChange={event => setReference(event.target.value)}/>
+            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+              <Text className="text-xs text-muted">ReVise will retrieve relevant engineering memory before review.</Text>
+              <Button className="w-full sm:w-auto" type="submit" disabled={loading || !reference}>
+                {loading ? "Analyzing…" : "Analyze Pull Request"}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      ) : (
+        <Card className="overflow-visible">
+          {/* The editor owns submission here (its own Ctrl/Cmd+Enter and file drop).
+              Pasting a GitHub PR URL still routes to the PR analyzer because
+              runAnalysis reads isPr, not just the mode. */}
+          <CodeEditorCard value={reference} onChange={setReference} onSubmit={runAnalysis} loading={loading}/>
+        </Card>
+      )}
+      {loading && <div className="mt-6" aria-live="polite"><LoadingState label={isPr ? "Analyzing Pull Request… Retrieving engineering memory… Reviewing changed files…" : "Analyzing code… Retrieving engineering memory… Reviewing the snippet…"}/></div>}
       {error && <div className="mt-6"><ErrorState title={isPr ? "Unable to analyze this pull request." : "Unable to analyze this code."} detail={error} onRetry={runAnalysis}/></div>}
       {review && <ReviewResults review={review}/>}
     </div>
