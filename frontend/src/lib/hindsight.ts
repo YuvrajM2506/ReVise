@@ -1,4 +1,4 @@
-import { MemoryItem, MemoryRecallResult, MemoryType, FocusArea } from './types';
+import { MemoryItem, MemoryRecallResult, MemoryType, FocusArea, MemoryRelevanceContext, ExcludedMemoryItem, FilteredMemoriesResult } from './types';
 import { getStore, saveStore, addDiagnosticLog } from './storage';
 
 const HINDSIGHT_BASE_URL = process.env.HINDSIGHT_BASE_URL || 'https://api.hindsight.vectorize.io';
@@ -310,5 +310,169 @@ export async function recallMemories(
       focus_area: filters.focus_area,
       tags: filters.tags,
     },
+  };
+}
+
+/**
+ * Filter and rank retrieved Hindsight memories to guarantee strict relevance
+ * to the current PR diff, files, and detected focus areas.
+ */
+export function filterRelevantMemories(
+  memories: MemoryItem[],
+  context: MemoryRelevanceContext
+): FilteredMemoriesResult {
+  const { service, files, diff_content, focus_areas, pr_title = '' } = context;
+
+  const fileNames = files.map(f => f.filename.toLowerCase());
+  const diffLower = (diff_content + ' ' + pr_title).toLowerCase();
+
+  // 1. Context classifications
+  const isConfigOnly = fileNames.length > 0 && fileNames.every(f =>
+    f.includes('.git') || f.includes('.docker') || f.includes('flake8') ||
+    f.includes('pre-commit') || f.endsWith('.md') || f.endsWith('.yml') ||
+    f.endsWith('.yaml') || f.endsWith('.toml') || f.endsWith('.json') ||
+    f.endsWith('.editorconfig') || f.endsWith('.ini') || f.endsWith('.cfg')
+  );
+
+  const hasDbChanges =
+    focus_areas.includes('Unsafe DB migration') ||
+    fileNames.some(f => f.endsWith('.sql') || f.includes('migration') || f.includes('schema') || f.includes('prisma') || f.includes('alembic')) ||
+    diffLower.includes('alter table') || diffLower.includes('create index') || diffLower.includes('drop table') || diffLower.includes('not null');
+
+  const hasSecretChanges =
+    focus_areas.includes('Missing secret') ||
+    diffLower.includes('stripe_') || diffLower.includes('api_key') || diffLower.includes('vault') ||
+    diffLower.includes('secret') || diffLower.includes('private_key') || diffLower.includes('password') ||
+    diffLower.includes('signing_key');
+
+  const hasPaymentChanges =
+    diffLower.includes('stripe') || diffLower.includes('payment') || diffLower.includes('checkout') ||
+    diffLower.includes('billing') || diffLower.includes('invoice') || diffLower.includes('charge');
+
+  const hasOrmOrConnectionChanges =
+    diffLower.includes('connection pool') || diffLower.includes('pool stress') || diffLower.includes('connection_limit') ||
+    (diffLower.includes('pool') && diffLower.includes('database')) || diffLower.includes('orm');
+
+  const hasAuthChanges =
+    diffLower.includes('auth') || diffLower.includes('session') || diffLower.includes('jwt') ||
+    diffLower.includes('token') || diffLower.includes('login') || diffLower.includes('oauth') || diffLower.includes('permission');
+
+  const relevant: MemoryItem[] = [];
+  const excluded: ExcludedMemoryItem[] = [];
+
+  for (const memory of memories) {
+    const memTitle = (memory.title || '').toLowerCase();
+    const memContent = (memory.content || '').toLowerCase();
+    const memTags = (memory.metadata?.tags || []).map(t => String(t).toLowerCase());
+    const memFocusAreas = (memory.metadata?.focus_areas || []).map(f => String(f).toLowerCase());
+    const memService = (memory.service || '').toLowerCase();
+    const memText = `${memTitle} ${memContent} ${memTags.join(' ')} ${memFocusAreas.join(' ')}`;
+
+    let isDisqualified = false;
+    let disqualifyReason = '';
+
+    // Domain disqualifications
+    const isDbMemory = memText.includes('migration') || memText.includes('alter table') || memText.includes('index') || memFocusAreas.includes('unsafe db migration') || memText.includes('access exclusivelock') || memText.includes('postgres');
+    const isSecretMemory = memText.includes('secret') || memText.includes('signing_key') || memText.includes('api_key') || memFocusAreas.includes('missing secret') || memText.includes('envalid');
+    const isPaymentMemory = memText.includes('payment') || memText.includes('checkout') || memText.includes('stripe');
+    const isOrmConnectionMemory = memText.includes('connection pool') || memText.includes('pool stress') || memText.includes('orm');
+    const isAuthSessionMemory = memText.includes('session') || memText.includes('authentication validation') || memText.includes('jwt');
+
+    if (isConfigOnly) {
+      if (isDbMemory && !hasDbChanges) {
+        isDisqualified = true;
+        disqualifyReason = 'Memory concerns database migrations/DDL locks, not modified in configuration/tooling PR.';
+      } else if (isSecretMemory && !hasSecretChanges) {
+        isDisqualified = true;
+        disqualifyReason = 'Memory concerns secret contract validation, not modified in configuration/tooling PR.';
+      } else if (isPaymentMemory && !hasPaymentChanges) {
+        isDisqualified = true;
+        disqualifyReason = 'Memory concerns payment/checkout subsystems, not modified in configuration/tooling PR.';
+      } else if (isOrmConnectionMemory && !hasOrmOrConnectionChanges) {
+        isDisqualified = true;
+        disqualifyReason = 'Memory concerns database connection pool saturation, not modified in configuration/tooling PR.';
+      } else if (isAuthSessionMemory && !hasAuthChanges) {
+        isDisqualified = true;
+        disqualifyReason = 'Memory concerns session authentication order, not modified in configuration/tooling PR.';
+      }
+    } else {
+      if (isDbMemory && !hasDbChanges) {
+        isDisqualified = true;
+        disqualifyReason = 'Memory concerns database migration locks, not present in current change.';
+      } else if (isSecretMemory && !hasSecretChanges) {
+        isDisqualified = true;
+        disqualifyReason = 'Memory concerns environment secrets, not present in current change.';
+      } else if (isPaymentMemory && !hasPaymentChanges) {
+        isDisqualified = true;
+        disqualifyReason = 'Memory concerns payment subsystem, not present in current change.';
+      } else if (isOrmConnectionMemory && !hasOrmOrConnectionChanges) {
+        isDisqualified = true;
+        disqualifyReason = 'Memory concerns database connection pool limits, not present in current change.';
+      }
+    }
+
+    if (isDisqualified) {
+      excluded.push({
+        memory_id: memory.id,
+        title: memory.title,
+        reason: disqualifyReason,
+      });
+      continue;
+    }
+
+    // Relevance scoring
+    let score = 0;
+
+    // Service match
+    if (service && memService === service.toLowerCase()) {
+      score += 20;
+    }
+
+    // Direct filename or tooling keyword match
+    for (const file of fileNames) {
+      const baseName = file.split('/').pop() || file;
+      const cleanBase = baseName.replace(/^[._]/, '');
+      if (cleanBase.length > 2 && memText.includes(cleanBase)) {
+        score += 35;
+      }
+    }
+
+    // Focus area match
+    if (focus_areas.some(fa => memFocusAreas.includes(fa.toLowerCase()))) {
+      score += 25;
+    }
+
+    // Meaningful technical keyword overlap
+    const keywords = ['pre-commit', 'flake8', 'gitignore', 'docker', 'linter', 'lint', 'format', 'migration', 'secret', 'pool', 'session', 'auth', 'contract', 'idempotent', 'ci'];
+    for (const kw of keywords) {
+      if (diffLower.includes(kw) && memText.includes(kw)) {
+        score += 15;
+      }
+    }
+
+    // General standards or conventions for repository
+    if (memory.type === 'standard' && (service && memService === service.toLowerCase())) {
+      score += 15;
+    }
+
+    if (score >= 30) {
+      relevant.push(memory);
+    } else {
+      excluded.push({
+        memory_id: memory.id,
+        title: memory.title,
+        reason: 'Insufficient technical term or pattern overlap with current change.',
+      });
+    }
+  }
+
+  const cappedRelevant = relevant.slice(0, 4);
+
+  return {
+    relevant: cappedRelevant,
+    excluded,
+    total_retrieved: memories.length,
+    relevant_count: cappedRelevant.length,
+    excluded_count: excluded.length,
   };
 }

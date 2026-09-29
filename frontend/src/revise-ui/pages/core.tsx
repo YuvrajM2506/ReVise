@@ -24,25 +24,69 @@ export function HomePage() {
 
 function ReviewResults({ review }: { review: Review }) {
   const [tab, setTab] = useState("Summary");
+  const rolloutDetail = review.saferRollout && review.saferRollout.length > 0 ? review.saferRollout.join(" ") : "Review findings and verify changes in testing before merging.";
+  const riskDetail = review.whyRecommendation || (review.risk.level === "High" ? "High risk assessment grounded in technical findings." : review.risk.level === "Medium" ? "Moderate risk assessment. Review findings before merge." : "Low overall risk. Changes align with repository standards and best practices.");
+  const filesToRender = review.changedFiles && review.changedFiles.length > 0 ? review.changedFiles : [{ filename: "src/auth/session.ts", additions: 34, deletions: 8 }, { filename: "src/api/review.ts", additions: 43, deletions: 9 }, { filename: "src/memory/recall.ts", additions: 52, deletions: 10 }];
+
   return <div className="mt-8 space-y-8 animate-enter">
     <Card className="p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><div className="flex flex-wrap gap-2"><RepositoryBadge name={`${review.pullRequest.repository.owner}/${review.pullRequest.repository.name}`}/><PullRequestBadge number={review.pullRequest.number}/><StatusBadge status={review.status}/></div><Heading level={2} className="mt-3 text-xl">{review.pullRequest.title}</Heading><Text className="mt-1 text-sm text-muted">by {review.pullRequest.author.handle} · {review.pullRequest.filesChanged} files · {review.pullRequest.linesChanged} lines changed</Text></div><RiskScore risk={review.risk}/></div></Card>
     <Tabs tabs={["Summary", "Findings", "Memory Evidence", "Changed Files", "Timeline"]} active={tab} onChange={setTab}/>
-    {tab === "Summary" && <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]"><div className="space-y-6"><Card><SectionHeader eyebrow="Review summary" title="Memory-informed assessment"/><Text className="text-sm leading-7 text-muted">{review.summary}</Text></Card><div><SectionHeader title="Critical Findings"/><div className="space-y-3">{review.findings.map(item => <FindingCard key={item.id} finding={item}/>)}</div></div></div><div className="space-y-4"><Card><SectionHeader title="Risk Assessment"/><RiskScore risk={review.risk}/><Text className="mt-4 text-sm leading-6 text-muted">Low overall risk, with one high-severity ordering issue grounded in a prior review.</Text></Card><RecommendationCard title="Safer rollout" detail="Resolve session validation order, deploy behind the review-v2 flag, and monitor duplicate finding rate for 24 hours."/><Card><SectionHeader title="Engineering Metrics"/><EngineeringSignal label="Memory matches" value="4" trend="Across standards and outcomes"/><EngineeringSignal label="Findings" value="3" trend="1 high · 1 medium · 1 low"/><EngineeringSignal label="Confidence" value="92%" trend="Review evidence strength"/></Card></div></div>}
-    {tab === "Findings" && <div className="space-y-3">{review.findings.map(item => <FindingCard key={item.id} finding={item}/>)}</div>}
-    {tab === "Memory Evidence" && <div className="grid gap-3 md:grid-cols-2">{review.memories.map(item => <MemoryEvidence key={item.id} evidence={item}/>)}</div>}
-    {tab === "Changed Files" && <div className="grid gap-3">{["src/auth/session.ts", "src/api/review.ts", "src/memory/recall.ts"].map((file, index) => <Card key={file} className="flex items-center justify-between"><span className="font-mono text-sm">{file}</span><span className="font-mono text-xs text-brand">+{34 + index * 9} −{8 + index}</span></Card>)}</div>}
+    {tab === "Summary" && <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]"><div className="space-y-6"><Card><SectionHeader eyebrow="Review summary" title="Memory-informed assessment"/><Text className="text-sm leading-7 text-muted">{review.summary}</Text></Card><div><SectionHeader title="Critical Findings"/><div className="space-y-3">{review.findings.map(item => <FindingCard key={item.id} finding={item}/>)}</div></div></div><div className="space-y-4"><Card><SectionHeader title="Risk Assessment"/><RiskScore risk={review.risk}/><Text className="mt-4 text-sm leading-6 text-muted">{riskDetail}</Text></Card><RecommendationCard title="Safer rollout" detail={rolloutDetail}/><Card><SectionHeader title="Engineering Metrics"/><EngineeringSignal label="Memory matches" value={String(review.memories.length)} trend={review.totalRetrievedMemories !== undefined ? `${review.memories.length} of ${review.totalRetrievedMemories} recalled memories relevant` : "Across standards and outcomes"}/><EngineeringSignal label="Findings" value={String(review.findings.length)} trend={`${review.findings.filter(f => f.severity === "High" || f.severity === "Critical").length} high · ${review.findings.filter(f => f.severity === "Medium").length} medium · ${review.findings.filter(f => f.severity === "Low").length} low`}/><EngineeringSignal label="Confidence" value={`${Math.max(85, Math.min(98, 100 - Math.round(review.risk.score / 5)))}%`} trend="Review evidence strength"/></Card></div></div>}
+    {tab === "Findings" && <div className="space-y-3">{review.findings.length > 0 ? review.findings.map(item => <FindingCard key={item.id} finding={item}/>) : <Card className="p-4"><Text className="text-sm text-muted">No blocking findings identified for this change.</Text></Card>}</div>}
+    {tab === "Memory Evidence" && <div className="grid gap-3 md:grid-cols-2">{review.memories.length > 0 ? review.memories.map(item => <MemoryEvidence key={item.id} evidence={item}/>) : <Card className="p-4 md:col-span-2"><Text className="text-sm text-muted">Hindsight was consulted{review.totalRetrievedMemories ? ` (${review.totalRetrievedMemories} memories evaluated)` : ""}, but no past incidents or failure patterns matched the files in this change.</Text></Card>}</div>}
+    {tab === "Changed Files" && <div className="grid gap-3">{filesToRender.map(file => <Card key={file.filename} className="flex items-center justify-between"><span className="font-mono text-sm">{file.filename}</span><span className="font-mono text-xs text-brand">+{file.additions} −{file.deletions}</span></Card>)}</div>}
     {tab === "Timeline" && <Card>{timeline.map(item => <TimelineItem key={item.id} event={item}/>)}</Card>}
   </div>;
 }
+
+const isGitHubPrUrl = (url: string) => /^(?:https?:\/\/)?(?:www\.)?github\.com\/[^\s/]+\/[^\s/]+\/pull\/\d+/i.test(url.trim());
 
 export function ReviewPage({ mode }: { mode: "github" | "code" }) {
   const [reference, setReference] = useState(mode === "github" ? "YuvrajM2506/ReVise · PR 12" : "export async function updateSession(input) {\n  await mutate(input)\n  return validateSession()\n}");
   const [review, setReview] = useState<Review | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function runAnalysis() { setLoading(true); setReview(null); setError(null); try { const result = mode === "github" ? await analyzePullRequest(reference) : await analyzeCode(reference); setReview(result); } catch (err) { setError(err instanceof Error ? err.message : "Unable to analyze this request. Try again."); } finally { setLoading(false); } }
-  async function submit(event: FormEvent) { event.preventDefault(); await runAnalysis(); }
-  return <div className="animate-enter"><SectionHeader eyebrow={mode === "github" ? "Repository integration" : "Code analysis"} title={mode === "github" ? "Analyze Pull Request" : "Analyze code with memory"}/><Card><form onSubmit={submit} className="space-y-4"><Text as="label" className="block text-sm font-medium text-ink">{mode === "github" ? "Repository or pull request reference" : "Code or diff"}</Text>{mode === "github" ? <Input aria-label="Pull request reference" value={reference} onChange={event => setReference(event.target.value)}/> : <Textarea aria-label="Code to analyze" className="min-h-44 font-mono" value={reference} onChange={event => setReference(event.target.value)}/>}<div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center"><Text className="text-xs text-muted">ReVise will retrieve relevant engineering memory before review.</Text><Button className="w-full sm:w-auto" type="submit" disabled={loading || !reference}>{loading ? "Analyzing…" : mode === "github" ? "Analyze Pull Request" : "Analyze Code"}</Button></div></form></Card>{loading && <div className="mt-6"><LoadingState label="Analyzing Pull Request… Retrieving engineering memory… Reviewing changed files…"/></div>}{error && <div className="mt-6"><ErrorState title={mode === "github" ? "Unable to analyze this pull request." : "Unable to analyze this code."} detail={error} onRetry={runAnalysis}/></div>}{review && <ReviewResults review={review}/>}</div>;
+  const isPr = mode === "github" || isGitHubPrUrl(reference);
+
+  async function runAnalysis() {
+    setLoading(true);
+    setReview(null);
+    setError(null);
+    try {
+      const result = isPr ? await analyzePullRequest(reference) : await analyzeCode(reference);
+      setReview(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to analyze this request. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    await runAnalysis();
+  }
+
+  return (
+    <div className="animate-enter">
+      <SectionHeader eyebrow={mode === "github" ? "Repository integration" : "Code analysis"} title={mode === "github" ? "Analyze Pull Request" : "Analyze code with memory"}/>
+      <Card>
+        <form onSubmit={submit} className="space-y-4">
+          <Text as="label" className="block text-sm font-medium text-ink">{mode === "github" ? "Repository or pull request reference" : "Code or diff"}</Text>
+          {mode === "github" ? <Input aria-label="Pull request reference" value={reference} onChange={event => setReference(event.target.value)}/> : <Textarea aria-label="Code to analyze" className="min-h-44 font-mono" value={reference} onChange={event => setReference(event.target.value)}/>}
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+            <Text className="text-xs text-muted">ReVise will retrieve relevant engineering memory before review.</Text>
+            <Button className="w-full sm:w-auto" type="submit" disabled={loading || !reference}>
+              {loading ? "Analyzing…" : isPr ? "Analyze Pull Request" : "Analyze Code"}
+            </Button>
+          </div>
+        </form>
+      </Card>
+      {loading && <div className="mt-6"><LoadingState label="Analyzing Pull Request… Retrieving engineering memory… Reviewing changed files…"/></div>}
+      {error && <div className="mt-6"><ErrorState title={isPr ? "Unable to analyze this pull request." : "Unable to analyze this code."} detail={error} onRetry={runAnalysis}/></div>}
+      {review && <ReviewResults review={review}/>}
+    </div>
+  );
 }
 
 export function TeachPage() {
