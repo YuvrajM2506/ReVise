@@ -155,8 +155,9 @@ export function ReviewPage({ mode }: { mode: "github" | "code" }) {
         <Card className="overflow-visible">
           {/* The editor owns submission here (its own Ctrl/Cmd+Enter and file drop).
               Pasting a GitHub PR URL still routes to the PR analyzer because
-              runAnalysis reads isPr, not just the mode. */}
-          <CodeEditorCard value={reference} onChange={setReference} onSubmit={runAnalysis} loading={loading}/>
+              runAnalysis reads isPr, not just the mode — so the button label has to
+              follow isPr too, or it promises a snippet review it will not deliver. */}
+          <CodeEditorCard value={reference} onChange={setReference} onSubmit={runAnalysis} loading={loading} submitLabel={isPr ? "Analyze Pull Request" : "Analyze Code"}/>
         </Card>
       )}
       {loading && <div className="mt-6" aria-live="polite"><LoadingState label={isPr ? "Analyzing Pull Request… Retrieving engineering memory… Reviewing changed files…" : "Analyzing code… Retrieving engineering memory… Reviewing the snippet…"}/></div>}

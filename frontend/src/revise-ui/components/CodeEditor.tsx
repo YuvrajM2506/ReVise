@@ -32,6 +32,9 @@ interface CodeEditorCardProps {
   onChange: (value: string) => void;
   onSubmit: () => void;
   loading: boolean;
+  /** Submit button label. The parent supplies this because it knows whether the
+      current input will be routed to the pull-request analyzer or the snippet one. */
+  submitLabel?: string;
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -188,7 +191,7 @@ function MemoryChips({
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
-export function CodeEditorCard({ value, onChange, onSubmit, loading }: CodeEditorCardProps) {
+export function CodeEditorCard({ value, onChange, onSubmit, loading, submitLabel = "Analyze Code" }: CodeEditorCardProps) {
   const [language, setLanguage]           = useState<Language>("Auto-detect");
   const [mode, setMode]                   = useState<InputMode>("Code");
   const [memorySources, setMemorySources] = useState(INITIAL_MEMORY_SOURCES);
@@ -443,7 +446,7 @@ export function CodeEditorCard({ value, onChange, onSubmit, loading }: CodeEdito
           ) : (
             <>
               <Zap size={15} aria-hidden="true" />
-              Analyze Code
+              {submitLabel}
               <kbd
                 className="hidden rounded border border-canvas/20 bg-canvas/15 px-1.5 py-0.5 font-mono text-[10px] tracking-normal sm:inline-flex"
                 title="Keyboard shortcut: Ctrl+Enter or Cmd+Enter"
